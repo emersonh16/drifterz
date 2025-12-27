@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://dsksrds112u2s"]
+
+[ext_resource type="Script" uid="uid://cv0i6wqfhy12" path="res://src/entities/DerelictLogic.gd" id="1_r0noa"]
+[ext_resource type="Texture2D" uid="uid://bquwiklv68jgt" path="res://src/sprites/Derelict-sprite.png" id="2_8wxuy"]
+
+[node name="DerelictLogic" type="CharacterBody2D"]
+script = ExtResource("1_r0noa")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_8wxuy")

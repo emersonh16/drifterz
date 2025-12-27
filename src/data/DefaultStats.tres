@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="DerelictStats" load_steps=2 format=3 uid="uid://dc6j6j7njgdas"]
+
+[ext_resource type="Script" uid="uid://bgkasqt1j77ew" path="res://src/data/DerelictStats.gd" id="1_p03wp"]
+
+[resource]
+script = ExtResource("1_p03wp")
+metadata/_custom_type_script = "uid://bgkasqt1j77ew"
