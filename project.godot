@@ -17,6 +17,7 @@ config/features=PackedStringArray("4.5", "Forward Plus")
 [autoload]
 
 SignalBus="*res://src/core/SignalBus.gd"
+MiasmaManager="*res://src/core/MiasmaManager.gd"
 
 [input]
 
