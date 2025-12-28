@@ -18,7 +18,7 @@ tile_size = Vector2i(64, 32)
 sources/0 = SubResource("TileSetAtlasSource_0qwtu")
 
 [sub_resource type="ViewportTexture" id="ViewportTexture_usxdn"]
-viewport_path = NodePath("fogmask")
+viewport_path = NodePath("FogMask")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_jvefd"]
 resource_local_to_scene = true
@@ -45,12 +45,20 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.23529412, 0.3529412, 0.47058824, 1)
 
-[node name="fogmask" type="SubViewport" parent="."]
+[node name="FogMask" type="SubViewport" parent="."]
 size = Vector2i(1152, 648)
 render_target_update_mode = 4
 
-[node name="MaskCamera" type="Camera2D" parent="fogmask"]
+[node name="FogMaskColorRect" type="ColorRect" parent="FogMask"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="MaskCamera" type="Camera2D" parent="FogMask"]
 script = ExtResource("4_t101k")
 
-[node name="FogPainter" type="Node2D" parent="fogmask"]
+[node name="FogPainter" type="Node2D" parent="FogMask"]
 script = ExtResource("5_36ipd")
