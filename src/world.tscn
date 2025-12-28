@@ -3,7 +3,6 @@
 [ext_resource type="Script" uid="uid://bp1c45262n86m" path="res://World.gd" id="1_0qwtu"]
 [ext_resource type="PackedScene" uid="uid://dsksrds112u2s" path="res://src/entities/DerelictLogic.tscn" id="1_tp5op"]
 [ext_resource type="Texture2D" uid="uid://bqkb4sb6pdwp4" path="res://src/sprites/meadow2.png" id="2_xlegt"]
-[ext_resource type="Script" path="res://src/vfx/MaskSync.gd" id="4_t101k"]
 [ext_resource type="Shader" path="res://src/vfx/MiasmaHole.gdshader" id="4_usxdn"]
 [ext_resource type="Script" path="res://src/vfx/FogPainter.gd" id="5_36ipd"]
 
@@ -35,6 +34,7 @@ tile_set = SubResource("TileSet_t101k")
 position = Vector2(500, 300)
 
 [node name="MiasmaSheet" type="CanvasLayer" parent="."]
+follow_viewport_enabled = false
 
 [node name="MiasmaColorRect" type="ColorRect" parent="MiasmaSheet"]
 material = SubResource("ShaderMaterial_jvefd")
@@ -56,9 +56,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 0, 0, 1)
-
-[node name="MaskCamera" type="Camera2D" parent="FogMask"]
-script = ExtResource("4_t101k")
 
 [node name="FogPainter" type="Node2D" parent="FogMask"]
 script = ExtResource("5_36ipd")
