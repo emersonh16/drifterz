@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bquwiklv68jgt"
-path="res://.godot/imported/Derelict-sprite.png-f1fa48d9dd0bccb9bd45c72a64b89177.ctex"
+uid="uid://bqkb4sb6pdwp4"
+path="res://.godot/imported/meadow2.png-7c01ae3a35871e6d31ec5c051a43b2d5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://src/sprites/Derelict-sprite.png"
-dest_files=["res://.godot/imported/Derelict-sprite.png-f1fa48d9dd0bccb9bd45c72a64b89177.ctex"]
+source_file="res://src/assets/sprites/meadow2.png"
+dest_files=["res://.godot/imported/meadow2.png-7c01ae3a35871e6d31ec5c051a43b2d5.ctex"]
 
 [params]
 

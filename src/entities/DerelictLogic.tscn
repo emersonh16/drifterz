@@ -1,7 +1,9 @@
-[gd_scene load_steps=3 format=3 uid="uid://dsksrds112u2s"]
+[gd_scene load_steps=5 format=3 uid="uid://dsksrds112u2s"]
 
 [ext_resource type="Script" uid="uid://cv0i6wqfhy12" path="res://src/entities/DerelictLogic.gd" id="1_r0noa"]
-[ext_resource type="Texture2D" uid="uid://bquwiklv68jgt" path="res://src/sprites/Derelict-sprite.png" id="2_8wxuy"]
+[ext_resource type="Texture2D" uid="uid://bquwiklv68jgt" path="res://src/assets/sprites/Derelict-sprite.png" id="2_8wxuy"]
+[ext_resource type="Script" uid="uid://niy6tab7lpgx" path="res://src/systems/beam/BeamController.gd" id="3_o4w74"]
+[ext_resource type="Script" uid="uid://db2qpwobubay4" path="res://src/systems/beam/BeamMiasmaEmitter.gd" id="4_wh5fh"]
 
 [node name="DerelictLogic" type="CharacterBody2D"]
 script = ExtResource("1_r0noa")
@@ -10,3 +12,11 @@ script = ExtResource("1_r0noa")
 texture = ExtResource("2_8wxuy")
 
 [node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="BeamController" type="Node" parent="."]
+script = ExtResource("3_o4w74")
+
+[node name="BeamVisualizer" type="Node2D" parent="BeamController"]
+
+[node name="BeamMiasmaEmitter" type="Node" parent="BeamController"]
+script = ExtResource("4_wh5fh")

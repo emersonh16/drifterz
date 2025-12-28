@@ -41,7 +41,7 @@
   - Loaded via `DefaultStats.tres` resource
 
 ### 3. World System
-- **World.gd**: Main world script
+- **World.gd** (`src/scenes/World.gd`): Main world script
   - Generates a 80x80 tile ground layer
   - Sets up the fog rendering system with:
     - `MiasmaSheet` CanvasLayer with ColorRect (fog overlay)
@@ -81,28 +81,45 @@
 - Gamepad support configured (d-pad and analog sticks)
 
 ## Project Structure
+
+The project follows a clean, organized structure with all source code under `src/`:
+
 ```
 drifterz/
+├── LICENSE
+├── ONBOARDING.md
 ├── project.godot          # Godot project config
-├── World.gd               # Main world script
-├── src/
-│   ├── core/              # Core systems (autoloads, utilities)
-│   │   ├── MiasmaManager.gd
-│   │   ├── SignalBus.gd
-│   │   └── CoordConverter.gd
-│   ├── entities/          # Game entities
-│   │   ├── DerelictLogic.gd
-│   │   └── DerelictLogic.tscn
-│   ├── data/              # Data resources
-│   │   ├── DerelictStats.gd
-│   │   └── DefaultStats.tres
-│   ├── sprites/           # Art assets
-│   ├── vfx/               # Visual effects
-│   │   ├── FogPainter.gd      # Fog visual rendering
-│   │   ├── MaskSync.gd        # Camera sync for fog mask
-│   │   └── MiasmaHole.gdshader # Fog shader
-│   └── world.tscn         # Main scene
+└── src/
+    ├── assets/            # All game assets
+    │   └── sprites/       # Sprite images
+    │       ├── Derelict-sprite.png
+    │       └── meadow2.png
+    ├── core/              # Core systems (autoloads, utilities)
+    │   ├── MiasmaManager.gd
+    │   ├── SignalBus.gd
+    │   └── CoordConverter.gd
+    ├── data/              # Data resources
+    │   ├── DerelictStats.gd
+    │   └── DefaultStats.tres
+    ├── entities/          # Game entities (scripts + scenes together)
+    │   ├── DerelictLogic.gd
+    │   └── DerelictLogic.tscn
+    ├── scenes/            # Main game scenes
+    │   ├── World.gd       # Main world script
+    │   └── World.tscn     # Main scene (entry point)
+    └── vfx/               # Visual effects
+        ├── FogPainter.gd      # Fog visual rendering
+        ├── MaskSync.gd        # Camera sync for fog mask
+        └── MiasmaHole.gdshader # Fog shader
 ```
+
+**Structure Notes:**
+- All source code is organized under `src/` for consistency
+- Scenes are grouped in `scenes/` directory (main game scenes)
+- Entities keep their scripts and scene files together in `entities/`
+- Assets are organized under `assets/` with subdirectories by type (`sprites/`)
+- Core systems (autoloads) are in `core/`
+- Visual effects (shaders, VFX scripts) are in `vfx/`
 
 ## Current State & Next Steps
 - ✅ Basic player movement implemented
