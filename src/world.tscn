@@ -49,8 +49,19 @@ color = Color(0.23529412, 0.3529412, 0.47058824, 1)
 size = Vector2i(1152, 648)
 render_target_update_mode = 4
 
-[node name="MaskCamera" type="Camera2D" parent="fogmask"]
-script = ExtResource("4_t101k")
+[node name="MaskCanvas" type="CanvasLayer" parent="fogmask"]
+layer = -1
+
+[node name="BlackBackground" type="ColorRect" parent="fogmask/MaskCanvas"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
 
 [node name="FogPainter" type="Node2D" parent="fogmask"]
 script = ExtResource("5_36ipd")
+
+[node name="MaskCamera" type="Camera2D" parent="fogmask"]
+script = ExtResource("4_t101k")
