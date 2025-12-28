@@ -18,5 +18,5 @@ func _process(_delta: float) -> void:
 	
 	# Step 4: Sync Logic - If we have a camera, sync position and zoom
 	# Round position to align SubViewport pixels with screen pixels (prevents jitter)
-	global_position = main_camera.global_position.round()
+	global_position = main_camera.global_position
 	zoom = main_camera.zoom
