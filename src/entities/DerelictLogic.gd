@@ -15,4 +15,3 @@ func _physics_process(_delta: float) -> void:
 	
 	# 4. Clear fog around player position (world-space carving)
 	MiasmaManager.clear_fog(global_position, 64.0)
-

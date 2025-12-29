@@ -12,9 +12,10 @@ func _ready() -> void:
 	# INITIALIZATION: Configure MultiMesh resource
 	multimesh.transform_format = MultiMesh.TRANSFORM_2D
 	
-	# Create and set the QuadMesh (16x8 size)
+	# Create and set the QuadMesh (16x8 size for texture bypass test)
+	# TEMPORARY: Testing without texture to rule out texture as gap cause
 	var quad_mesh := QuadMesh.new()
-	quad_mesh.size = Vector2(16, 8)
+	quad_mesh.size = Vector2(16.0, 8.0)
 	multimesh.mesh = quad_mesh
 	
 	# Initialize instance count to 0 (will be rebuilt in _process)
@@ -23,16 +24,18 @@ func _ready() -> void:
 	# Set texture filter to Nearest for pixel-perfect rendering
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	
+	# TEMPORARILY COMMENTED OUT: Texture bypass test
 	# Load the stamp texture
-	var stamp_tex := load("res://src/vfx/miasma_stamp.png") as Texture2D
-	if stamp_tex:
-		self.texture = stamp_tex
-	else:
-		push_error("FogPainter: Failed to load miasma_stamp.png. Please create a 16x8 white isometric diamond texture.")
+	# var stamp_tex := load("res://src/vfx/miasma_stamp.png") as Texture2D
+	# if stamp_tex:
+	# 	self.texture = stamp_tex
+	# else:
+	# 	push_error("FogPainter: Failed to load miasma_stamp.png. Please create a 16x8 white isometric diamond texture.")
 	
 	# Create CanvasItemMaterial for proper blending
+	# Use Subtract blend mode to cut holes in fog overlay
 	var canvas_material := CanvasItemMaterial.new()
-	canvas_material.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
+	canvas_material.blend_mode = CanvasItemMaterial.BLEND_MODE_SUB
 	self.material = canvas_material
 
 func _process(_delta: float) -> void:
@@ -55,13 +58,14 @@ func _rebuild_multimesh() -> void:
 	# Set transform for each cleared tile
 	var instance_index := 0
 	for grid_pos in MiasmaManager.cleared_tiles.keys():
-		# WORLD-SPACE TRUTH: Convert grid to world origin
-		# Formula: world_origin = Vector2(grid_pos.x * 16.0, grid_pos.y * 8.0)
-		var world_origin := Vector2(grid_pos.x * 16.0, grid_pos.y * 8.0)
+		# WORLD-SPACE TRUTH: Convert grid to world center
+		# Formula: world_center = Vector2(grid_pos.x * 16.0 + 8.0, grid_pos.y * 8.0 + 4.0)
+		# This places the CENTER of the 16x8 mesh into the CENTER of the grid cell
+		var world_center := Vector2(grid_pos.x * 16.0 + 8.0, grid_pos.y * 8.0 + 4.0)
 		
-		# THE POSITION: Create transform with world origin
+		# THE POSITION: Create transform with world center
 		# NO CAMERA MATH - This is absolute world position
-		var instance_transform := Transform2D(0, world_origin)
+		var instance_transform := Transform2D(0, world_center)
 		
 		# Set the instance transform
 		multimesh.set_instance_transform_2d(instance_index, instance_transform)
