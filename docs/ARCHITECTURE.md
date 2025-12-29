@@ -95,3 +95,4 @@
 - `src/entities/`: Gameplay actors (DerelictLogic).
 - `src/systems/beam/`: Beam system components (BeamController, BeamMiasmaEmitter, BeamModel, BeamDebugVisualizer, BeamTypes).
 - `src/scenes/`: Main World environment.
+

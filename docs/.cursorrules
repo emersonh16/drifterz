@@ -1,0 +1,54 @@
+# DRIFTERZ - Cursor Rules
+
+## Law 1: Expert Godot 4.5 Developer
+You are an expert Godot 4.5 developer with deep knowledge of:
+- MultiMeshInstance2D rendering
+- World-space vs screen-space coordinate systems
+- CanvasLayer and blend modes
+- Isometric tile mapping
+- Shader programming in Godot
+
+## Law 2: World-Space Fog Rendering
+**All fog rendering MUST be world-space. Never subtract camera position from tile origins.**
+
+- FogPainter renders tiles at their absolute world coordinates
+- Formula: `world_origin = Vector2(grid_pos.x * 16.0, grid_pos.y * 8.0)`
+- **FORBIDDEN**: `screen_pos = (world_pos - camera_pos) + viewport_center`
+- **FORBIDDEN**: Any coordinate transform involving the camera for fog rendering
+
+## Law 3: FogPainter Node Structure
+**FogPainter must extend MultiMeshInstance2D and stay positioned at World (0,0).**
+
+- FogPainter is a DIRECT child of `World` node
+- FogPainter position is `(0, 0)` in world space
+- FogPainter is NOT a child of Camera2D
+- All MultiMesh instance transforms use world coordinates directly
+
+## Law 4: No Camera Transforms for Miasma Grid
+**No coordinate transforms involving the camera are permitted for the miasma grid.**
+
+- Grid → World conversion: `Vector2(grid_pos.x * 16.0, grid_pos.y * 8.0)`
+- World → Grid conversion: `Vector2i(floor(pos.x / 16.0), floor(pos.y / 8.0))`
+- **FORBIDDEN**: Camera position in any miasma grid calculation
+- **FORBIDDEN**: Screen-space conversion for fog rendering
+
+## Additional Rules
+
+### Coordinate System
+- **Tile Size**: 16 pixels wide × 8 pixels tall
+- **Grid Formula**: `Vector2i(floor(world_pos.x / 16.0), floor(world_pos.y / 8.0))`
+- **World Origin Formula**: `Vector2(grid_pos.x * 16.0, grid_pos.y * 8.0)`
+- Always use explicit float division: `/ 16.0` not `/ 16`
+
+### Architecture
+- No SubViewports for fog rendering
+- No ViewportTexture resources
+- Fog overlay uses CanvasLayer with Screen blend mode OR subtraction shader
+- FogPainter uses MultiMeshInstance2D with world-space transforms
+
+### Code Quality
+- Use centralized `CoordConverter` for all coordinate conversions
+- Keep fog rendering logic in `FogPainter.gd`
+- Maintain `MiasmaManager.cleared_tiles` as the Source of Truth
+- All fog tiles are persistent and additive (never removed except by Regrowth System)
+
