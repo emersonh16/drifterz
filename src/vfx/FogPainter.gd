@@ -24,19 +24,10 @@ func _ready() -> void:
 	# Set texture filter to Nearest for pixel-perfect rendering
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	
-	# TEMPORARILY COMMENTED OUT: Texture bypass test
-	# Load the stamp texture
-	# var stamp_tex := load("res://src/vfx/miasma_stamp.png") as Texture2D
-	# if stamp_tex:
-	# 	self.texture = stamp_tex
-	# else:
-	# 	push_error("FogPainter: Failed to load miasma_stamp.png. Please create a 16x8 white isometric diamond texture.")
-	
-	# Create CanvasItemMaterial for proper blending
-	# Use Subtract blend mode to cut holes in fog overlay
-	var canvas_material := CanvasItemMaterial.new()
-	canvas_material.blend_mode = CanvasItemMaterial.BLEND_MODE_SUB
-	self.material = canvas_material
+	# Physical Sandwich method: Draw grass-colored diamonds on top of fog
+	# This "re-draws" the meadow exactly where the player has walked
+	# Meadow green color (matches typical grass texture)
+	self_modulate = Color(0.4, 0.6, 0.3, 1.0)  # Meadow green
 
 func _process(_delta: float) -> void:
 	# DATA REFRESH: Rebuild MultiMesh based on cleared tiles
@@ -70,4 +61,3 @@ func _rebuild_multimesh() -> void:
 		# Set the instance transform
 		multimesh.set_instance_transform_2d(instance_index, instance_transform)
 		instance_index += 1
-
