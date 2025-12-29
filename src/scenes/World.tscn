@@ -1,10 +1,11 @@
-[gd_scene load_steps=11 format=3 uid="uid://c3cggfyf14ghj"]
+[gd_scene load_steps=12 format=3 uid="uid://c3cggfyf14ghj"]
 
 [ext_resource type="Script" uid="uid://bp1c45262n86m" path="res://src/scenes/World.gd" id="1_0qwtu"]
 [ext_resource type="PackedScene" uid="uid://dsksrds112u2s" path="res://src/entities/DerelictLogic.tscn" id="1_tp5op"]
 [ext_resource type="Texture2D" uid="uid://bqkb4sb6pdwp4" path="res://src/assets/sprites/meadow2.png" id="2_xlegt"]
 [ext_resource type="Shader" path="res://src/vfx/MiasmaHole.gdshader" id="4_usxdn"]
 [ext_resource type="Script" path="res://src/vfx/FogPainter.gd" id="5_36ipd"]
+[ext_resource type="Script" path="res://src/vfx/MaskSync.gd" id="6_masksync"]
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_0qwtu"]
 texture = ExtResource("2_xlegt")
 texture_region_size = Vector2i(64, 32)
@@ -43,6 +44,9 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 0, 0, 1)
+
+[node name="MaskSync" type="Camera2D" parent="DerelictLogic/Camera2D/FogMask"]
+script = ExtResource("6_masksync")
 
 [node name="FogPainter" type="Node2D" parent="DerelictLogic/Camera2D/FogMask"]
 script = ExtResource("5_36ipd")
