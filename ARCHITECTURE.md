@@ -24,10 +24,11 @@
 * **World (Node2D)**
     * **WorldGrid (TileMapLayer)**: Ground layer (64x32 isometric).
     * **DerelictLogic (CharacterBody2D)**: Player entity and Lighthouse controller.
-    * **MiasmaSheet (CanvasLayer)**: Full-screen ColorRect with `MiasmaHole.gdshader`.
-    * **FogMask (SubViewport)**: 1152x648 render target for the fog mask.
-        * **MaskSync (Camera2D)**: Syncs position/zoom with main player camera.
-        * **FogPainter (Node2D)**: Draws 16x8 isometric diamonds for cleared Miasma.
+        * **Camera2D**: Main player camera (follows player).
+            * **FogMask (SubViewport)**: Dynamic size render target (synced to window size) for the fog mask. Child of Camera2D for automatic transform inheritance.
+                * **FogMaskColorRect**: Black background.
+                * **FogPainter (Node2D)**: Draws 16x8 rectangles for cleared Miasma. Handles SubViewport size syncing.
+    * **MiasmaSheet (CanvasLayer)**: Full-screen ColorRect with `MiasmaHole.gdshader`. Fixed to screen (`follow_viewport_enabled = false`).
 
 ---
 
@@ -43,7 +44,14 @@
     - Calculates world-pixel distance: `dx = t_world.x - world_pos.x`, `dy = (t_world.y - world_pos.y) * 2.0`
     - Clears tile only if `(dx*dx + dy*dy) <= r_sq` (absolute world-pixel check)
   - This ensures solid elliptical clearing with no checkerboard pattern
-* **Rendering**: FogPainter draws 16x8 isometric diamonds with hardcoded points: `(0,-4), (8,0), (0,4), (-8,0)` from tile center
+* **Rendering**: 
+  - FogPainter draws 16x8 rectangles using `draw_rect()` to ensure full coverage
+  - FogPainter enforces SubViewport size parity: `get_parent().size = get_tree().root.size` (synced to window size)
+  - FogMask SubViewport is a child of Camera2D, so it automatically inherits the camera's transform (position, zoom, offset)
+  - This eliminates the need for MaskSync - the viewport naturally follows the camera
+  - MiasmaSheet CanvasLayer is fixed to screen (`follow_viewport_enabled = false`)
+  - MiasmaHole shader uses `SCREEN_UV` for screen-space sampling: ColorRect covers full screen, mask texture is camera-relative
+  - With resolution parity and camera-relative viewport, SCREEN_UV provides correct screen-space alignment
 * **3D Volume**: Achieved via a parallax-offset shader pass in `MiasmaHole.gdshader` to simulate height/volume.
 * **Persistence**: `cleared_tiles` dictionary stores `Vector2i` keys representing Miasma sub-tiles.
 
@@ -56,6 +64,6 @@
 
 ## 4. File Map & Dependencies
 - `src/core/`: Global logic (MiasmaManager, SignalBus, CoordConverter).
-- `src/vfx/`: Rendering (FogPainter, MaskSync, MiasmaHole.gdshader).
+- `src/vfx/`: Rendering (FogPainter, MiasmaHole.gdshader).
 - `src/entities/`: Gameplay actors (DerelictLogic, BeamController).
 - `src/scenes/`: Main World environment.

@@ -23,13 +23,16 @@
 
 - **MiasmaHole.gdshader** (`src/vfx/MiasmaHole.gdshader`): Shader that applies the fog mask
   - Takes a `mask_texture` uniform (sampler2D)
+  - Uses `SCREEN_UV` to sample the mask texture for screen-space alignment
+  - Since FogMask is a child of Camera2D, the SubViewport output aligns 1:1 with screen space
+  - With resolution parity (SubViewport size = window size), SCREEN_UV provides correct alignment
   - Inverts the mask (1.0 - mask_sample.r) to control alpha/visibility
   - Applied to a ColorRect that covers the entire screen
 
-- **MaskSync** (`src/vfx/MaskSync.gd`): Camera that syncs with the main player camera
-  - Extends Camera2D
-  - Copies position and zoom from the active camera each frame
-  - Used in the FogMask SubViewport to keep the mask aligned with the game view
+- **FogMask SubViewport Architecture**: The FogMask SubViewport is now a child of the main Camera2D
+  - This allows automatic transform inheritance - the viewport naturally follows the camera
+  - No separate sync script needed - the camera's transform is automatically applied
+  - FogPainter handles SubViewport size syncing: `get_parent().size = get_tree().root.size` (matches window size)
 
 ### 2. Player System
 - **DerelictLogic** (`src/entities/DerelictLogic.gd`): The player character
@@ -47,10 +50,10 @@
 - **World.gd** (`src/scenes/World.gd`): Main world script
   - Generates a 80x80 tile ground layer
   - Sets up the fog rendering system with:
-    - `MiasmaSheet` CanvasLayer with ColorRect (fog overlay)
-    - `FogMask` SubViewport (renders the mask texture)
-    - `MaskCamera` (syncs with player camera)
-    - `FogPainter` (draws cleared areas)
+    - `MiasmaSheet` CanvasLayer fixed to screen (`follow_viewport_enabled = false`)
+    - `MiasmaColorRect` (Full Rect, mouse_filter = Ignore) with `MiasmaHole.gdshader`
+    - `FogMask` SubViewport (child of Camera2D, dynamic size synced to window) renders the mask texture
+    - `FogPainter` (draws 16x8 rectangles for cleared areas, handles size syncing)
 
 ### 4. Core Utilities
 - **SignalBus** (`src/core/SignalBus.gd`): Autoload singleton for decoupled communication
@@ -88,12 +91,18 @@
      - Clears tile only if `(dx*dx + dy*dy) <= r_sq` (absolute world-pixel distance check)
    - Stores cleared tiles in `cleared_tiles` dictionary
    - **Result**: Solid elliptical clearing with no checkerboard pattern
-3. `FogPainter` (in FogMask SubViewport) draws 16x8 isometric diamonds for each cleared tile:
+3. `FogPainter` (in FogMask SubViewport) draws 16x8 rectangles for each cleared tile:
    - Converts grid positions to world centers using `CoordConverter.miasma_to_world_center()`
-   - Draws hardcoded diamond polygons with points: `(0,-4), (8,0), (0,4), (-8,0)`
-4. `MaskSync` camera keeps FogMask viewport aligned with main camera
-5. `MiasmaHole` shader reads FogMask texture → inverts it → controls fog ColorRect alpha
-6. Result: Fog appears everywhere except where player has been (solid elliptical clearing area)
+   - Draws full-coverage rectangles: `Rect2(world_center - Vector2(8, 4), Vector2(16, 8))`
+   - Enforces resolution parity: SubViewport size = window size (`get_tree().root.size`)
+   - Since FogMask is a child of Camera2D, the camera's transform is automatically applied
+4. `MiasmaHole` shader:
+   - Samples FogMask texture using `SCREEN_UV` (screen-space sampling)
+   - Since FogMask is camera-relative, the SubViewport output aligns 1:1 with screen space
+   - With resolution parity, SCREEN_UV provides correct screen-space alignment
+   - Inverts the mask → controls fog ColorRect alpha
+5. `MiasmaSheet` CanvasLayer is fixed to screen (fog overlay stays on screen, mask moves with camera view)
+6. Result: Fog appears everywhere except where player has been (solid elliptical clearing area that stays locked to player position on screen)
 
 ### Input System
 - WASD keys for movement
@@ -165,15 +174,16 @@
 ### 5. Screen/Viewport Coordinates
 - **Type**: `Vector2i` (integer pixels)
 - **FogMask SubViewport**: 
-  - Size: `Vector2i(1152, 648)` (fixed resolution)
-  - Location: `World/FogMask` SubViewport
+  - Size: Dynamic (synced to window size via `get_tree().root.size`)
+  - Location: `World/DerelictLogic/Camera2D/FogMask` SubViewport (child of Camera2D)
   - Purpose: Renders the fog mask texture
-  - Coordinate Space: World coordinates (via MaskSync camera)
+  - Coordinate Space: World coordinates (automatically transformed by parent Camera2D)
+  - Architecture: Child of Camera2D for automatic transform inheritance (no sync script needed)
 - **MiasmaColorRect**:
   - Type: Screen-space ColorRect (anchors to full screen)
   - Location: `World/MiasmaSheet/MiasmaColorRect`
   - Coordinate Space: Screen coordinates (0,0 to screen width/height)
-  - Uses shader with `mask_texture` uniform (UV coordinates 0.0-1.0)
+  - Uses shader with `mask_texture` uniform (SCREEN_UV coordinates for screen-space sampling)
 - **Location**: `src/scenes/World.tscn`
 
 ### 6. Camera Coordinate Systems
@@ -185,34 +195,35 @@
 - **Position**: Inherits from player's `global_position`
 - **Used By**: Main game viewport rendering
 
-#### MaskSync Camera (FogMask SubViewport)
-- **Type**: `Camera2D` (extends `MaskSync.gd`)
-- **Location**: `World/FogMask/MaskSync` (Camera2D node in FogMask SubViewport)
-- **Purpose**: Syncs with main camera to keep fog mask aligned
-- **Sync Logic**: 
-  - Finds main camera via `get_tree().root.get_camera_2d()`
-  - Copies `global_position` and `zoom` each frame
-  - Process priority: 100 (runs after player movement)
-- **Coordinate Space**: World coordinates (synced to main camera)
-- **Location**: `src/vfx/MaskSync.gd`
-- **Status**: ✅ **IMPLEMENTED** - Camera node added to scene tree
+#### FogMask SubViewport (Camera-Relative Architecture)
+- **Type**: `SubViewport` (child of Camera2D)
+- **Location**: `World/DerelictLogic/Camera2D/FogMask` (SubViewport node as child of main Camera2D)
+- **Purpose**: Renders fog mask texture, automatically aligned with camera view
+- **Architecture**: 
+  - SubViewport is a child of Camera2D, so it automatically inherits the camera's transform
+  - No separate sync script needed - transform inheritance handles alignment
+  - FogPainter handles size syncing: `get_parent().size = get_tree().root.size`
+- **Coordinate Space**: World coordinates (automatically transformed by parent Camera2D)
+- **Status**: ✅ **IMPLEMENTED** - Camera-relative architecture eliminates sync complexity
 
 ### 7. FogPainter Drawing Coordinates
 - **Type**: `Vector2` (world coordinates for drawing)
-- **Location**: `World/FogMask/FogPainter` (Node2D in FogMask SubViewport)
-- **Coordinate Space**: World coordinates (drawn in FogMask viewport which uses world space via camera)
+- **Location**: `World/DerelictLogic/Camera2D/FogMask/FogPainter` (Node2D in FogMask SubViewport)
+- **Coordinate Space**: World coordinates (drawn in FogMask viewport, automatically transformed by parent Camera2D)
 - **Conversion Logic**:
   - Reads grid coordinates from `MiasmaManager.cleared_tiles`
   - Converts to world center using `CoordConverter.miasma_to_world_center(grid_pos)`
-  - Draws 16x8 isometric diamond polygons with hardcoded points: `(0,-4), (8,0), (0,4), (-8,0)` from tile center
+  - Draws 16x8 rectangles using `draw_rect()` for full coverage
+  - Handles SubViewport size syncing: `get_parent().size = get_tree().root.size`
 - **Location**: `src/vfx/FogPainter.gd`
 
 ### 8. Shader UV Coordinates
-- **Type**: `vec2` (normalized 0.0-1.0)
+- **Type**: `vec2` (screen-space coordinates)
 - **Location**: `MiasmaHole.gdshader`
-- **Purpose**: Samples the mask texture
+- **Purpose**: Samples the mask texture in screen space
 - **Input**: `mask_texture` uniform (ViewportTexture from FogMask SubViewport)
-- **Coordinate Space**: Normalized UV (0,0 = top-left, 1,1 = bottom-right of texture)
+- **Coordinate Space**: `SCREEN_UV` (screen-space coordinates, 0,0 = top-left of screen, 1,1 = bottom-right)
+- **Rationale**: Since FogMask is camera-relative, the SubViewport output aligns 1:1 with screen space
 - **Location**: `src/vfx/MiasmaHole.gdshader`
 
 ### Coordinate Conversion Summary
@@ -223,7 +234,7 @@
 | Miasma Grid (Vector2i) | World Center (Vector2) | `CoordConverter.miasma_to_world_center(grid_pos)` | `MiasmaManager.clear_fog()`, `FogPainter._draw()`, centralized |
 | World (Vector2) | Isometric (Vector2) | `CoordConverter.to_isometric(vector)` | `CoordConverter.to_isometric()` (unused) |
 | World | Screen | Camera transform | Godot Camera2D (automatic) |
-| World | FogMask Viewport | MaskSync camera sync | `MaskSync._process()` |
+| World | FogMask Viewport | Camera transform inheritance | SubViewport as child of Camera2D (automatic) |
 
 ### Known Issues & Complexity Problems
 
@@ -239,8 +250,9 @@
    - ✅ **FIXED**: Coordinate conversions are now centralized in `CoordConverter`
    - ✅ **FIXED**: Miasma grid uses proper 16x8 tile dimensions
    - ✅ **FIXED**: World-pixel distance checks ensure consistent coordinate space
-   - ✅ **FIXED**: MaskSync camera is now in scene tree
-   - ✅ **FIXED**: FogPainter uses hardcoded diamond points for perfect alignment
+   - ✅ **FIXED**: FogMask SubViewport is now a child of Camera2D for automatic transform inheritance
+   - ✅ **FIXED**: FogPainter uses rectangles for full coverage and handles size syncing
+   - ✅ **FIXED**: Shader uses SCREEN_UV for correct screen-space alignment
 
 ### Maps & Scenes
 
@@ -250,12 +262,12 @@
 - **Children**:
   - `WorldGrid` (TileMapLayer) - 80x80 isometric tilemap
   - `DerelictLogic` (CharacterBody2D) - Player at position (500, 300)
+    - `Camera2D` - Main player camera
+      - `FogMask` (SubViewport) - Dynamic size render target (synced to window)
+        - `FogMaskColorRect` - Black background
+        - `FogPainter` (Node2D) - Draws cleared fog areas (16x8 rectangles, handles size syncing)
   - `MiasmaSheet` (CanvasLayer) - Fog overlay layer
     - `MiasmaColorRect` - Full-screen fog with shader
-  - `FogMask` (SubViewport) - 1152x648 render target
-    - `FogMaskColorRect` - Black background
-    - `MaskSync` (Camera2D) - Syncs with main camera for fog mask alignment
-    - `FogPainter` (Node2D) - Draws cleared fog areas (16x8 isometric diamonds)
 
 #### Player Entity Scene
 - **File**: `src/entities/DerelictLogic.tscn`
@@ -306,7 +318,6 @@ drifterz/
     │   └── World.tscn     # Main scene (entry point)
     └── vfx/               # Visual effects
         ├── FogPainter.gd      # Fog visual rendering
-        ├── MaskSync.gd        # Camera sync for fog mask
         └── MiasmaHole.gdshader # Fog shader
 ```
 
