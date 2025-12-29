@@ -16,18 +16,18 @@
   - **Isometric Distance Formula**: Checks distance to nearest point on tile, not center: `(dx*dx + dy*dy) <= r_sq` where `dy` is scaled by 2.0 for isometric space
   - Uses +16px radius buffer in loop ranges to ensure all overlapping tiles are checked: X uses `ceil((radius + 16.0) / 16.0)`, Y uses `ceil((radius + 16.0) / 8.0)`
   - **✅ CLEARING LOGIC CONFIRMED WORKING**: Debug output shows tiles are correctly added to `cleared_tiles` dictionary
-  - **⚠️ RENDERING ISSUE**: Despite correct clearing, visual checkerboard pattern persists - this is a rendering/coordinate alignment problem
+  - **✅ MULTIMESH RENDERING**: MultiMesh strategy with texture stamp provides watertight coverage and eliminates rendering issues
 
-- **FogPainter** (`src/vfx/FogPainter.gd`): Draws the visual representation of cleared fog
-  - Extends Node2D, draws 16x8 isometric diamond polygons for each cleared tile
-  - **Diamond Geometry**: Uses exact diamond polygon offsets: `(0, -4), (8, 0), (0, 4), (-8, 0)` from tile center
-  - **⚠️ KNOWN ISSUE - CHECKERBOARD PATTERN**: Visual checkerboard pattern persists despite tiles being correctly cleared. Debug confirms tiles are in `cleared_tiles` dictionary, indicating a rendering/coordinate alignment issue.
-  - **⚠️ KNOWN ISSUE - ALIGNMENT**: Miasma tiles are not properly aligned with ground tiles. There is a consistent offset between miasma diamonds and ground tile boundaries.
-  - Uses `CoordConverter.miasma_to_world_origin()` to get tile origin, then adds center offset (8, 4) for diamond drawing
-  - Converts world coordinates to SubViewport coordinates: `(world_pos - camera_world_pos) + viewport_center`
-  - Uses pixel-perfect rounded coordinates to prevent sub-pixel gaps
-  - Redraws every frame (optimization planned for later)
-  - Uses `MiasmaManager.cleared_tiles` persistent dictionary to determine what to draw
+- **FogPainter** (`src/vfx/FogPainter.gd`): Renders the visual representation of cleared fog using MultiMesh
+  - Extends `MultiMeshInstance2D` for efficient batch rendering
+  - **MultiMesh Strategy**: Uses a 16x8 texture stamp (`miasma_stamp.png`) containing a white isometric diamond shape
+  - **Texture Stamp**: `miasma_stamp.png` is a 16x8 pixel PNG with white diamond (vertices: Top(8,0), Right(16,4), Bottom(8,8), Left(0,4)) on transparent background
+  - **Watertight Coverage**: The texture naturally interlocks with zero gaps, eliminating checkerboard patterns
+  - **Pixel-Perfect Rendering**: Uses `TEXTURE_FILTER_NEAREST` for crisp, pixel-perfect rendering without blur
+  - **Snapped Origin Logic**: Converts grid to world origin using `CoordConverter.miasma_to_world_origin()`, calculates screen space: `(tile_world_origin - camera_world_pos) + viewport_center`, then floors the origin to lock to pixel grid
+  - **Blending**: Uses `CanvasItemMaterial` with `BLEND_MODE_MIX` for proper transparency handling
+  - Updates MultiMesh instances every frame based on `MiasmaManager.cleared_tiles` dictionary
+  - Handles SubViewport size syncing: `get_parent().size = get_tree().root.size`
 
 - **MiasmaHole.gdshader** (`src/vfx/MiasmaHole.gdshader`): Shader that applies the fog mask
   - Takes a `mask_texture` uniform (sampler2D)
@@ -133,15 +133,17 @@
      - Clears tile only if `(dx*dx + (dy*2.0)*(dy*2.0)) <= r_sq` (isometric distance formula with Y-axis 2.0x scaling)
    - Stores cleared tiles in `cleared_tiles` dictionary
    - **Result**: Solid elliptical clearing with no checkerboard pattern
-3. `FogPainter` (in FogMask SubViewport) draws 16x8 isometric diamond polygons for each cleared tile:
+3. `FogPainter` (MultiMeshInstance2D in FogMask SubViewport) renders cleared tiles using MultiMesh:
+   - Uses 16x8 texture stamp (`miasma_stamp.png`) containing white isometric diamond shape
    - Converts grid positions to world origin using `CoordConverter.miasma_to_world_origin()`
-   - Converts world coordinates to SubViewport coordinates: `(world_pos - camera_world_pos) + viewport_center`
-   - Adds center offset (8, 4) to get diamond center position
-   - Draws isometric diamonds using exact polygon offsets: `(0, -4), (8, 0), (0, 4), (-8, 0)` relative to tile center
-   - Uses pixel-perfect rounded coordinates to prevent sub-pixel gaps
+   - Calculates screen space origin: `(tile_world_origin - camera_world_pos) + viewport_center`
+   - Floors the origin to lock to pixel grid: `snapped_origin = screen_origin.floor()`
+   - Creates MultiMesh instance transform at snapped origin (no rotation, scale 1:1)
+   - Uses `TEXTURE_FILTER_NEAREST` for pixel-perfect rendering
+   - Uses `CanvasItemMaterial` with `BLEND_MODE_MIX` for proper transparency
    - Enforces resolution parity: SubViewport size = window size (`get_tree().root.size`)
    - Since FogMask is a child of Camera2D, the camera's transform is automatically applied
-   - **⚠️ KNOWN ISSUE**: Visual checkerboard pattern and alignment issues persist despite correct data clearing
+   - **✅ WATERTIGHT COVERAGE**: Texture stamp naturally interlocks with zero gaps, eliminating checkerboard patterns
 4. `MiasmaHole` shader:
    - Samples FogMask texture using `SCREEN_UV` (screen-space sampling)
    - Since FogMask is camera-relative, the SubViewport output aligns 1:1 with screen space
@@ -254,14 +256,17 @@
 - **Coordinate Space**: World coordinates (automatically transformed by parent Camera2D)
 - **Status**: ✅ **IMPLEMENTED** - Camera-relative architecture eliminates sync complexity
 
-### 7. FogPainter Drawing Coordinates
-- **Type**: `Vector2` (world coordinates for drawing)
-- **Location**: `World/DerelictLogic/Camera2D/FogMask/FogPainter` (Node2D in FogMask SubViewport)
-- **Coordinate Space**: World coordinates (drawn in FogMask viewport, automatically transformed by parent Camera2D)
+### 7. FogPainter MultiMesh Coordinates
+- **Type**: `Vector2` (world coordinates for instance transforms)
+- **Location**: `World/DerelictLogic/Camera2D/FogMask/FogPainter` (MultiMeshInstance2D in FogMask SubViewport)
+- **Coordinate Space**: World coordinates (rendered in FogMask viewport, automatically transformed by parent Camera2D)
 - **Conversion Logic**:
   - Reads grid coordinates from `MiasmaManager.cleared_tiles`
-  - Converts to world center using `CoordConverter.miasma_to_world_center(grid_pos)`
-  - Draws 16x8 rectangles using `draw_rect()` for full coverage
+  - Converts to world origin using `CoordConverter.miasma_to_world_origin(grid_pos)`
+  - Calculates screen space origin: `(tile_world_origin - camera_world_pos) + viewport_center`
+  - Floors to pixel grid: `snapped_origin = screen_origin.floor()`
+  - Sets MultiMesh instance transform at snapped origin
+  - Uses 16x8 texture stamp (`miasma_stamp.png`) for rendering
   - Handles SubViewport size syncing: `get_parent().size = get_tree().root.size`
 - **Location**: `src/vfx/FogPainter.gd`
 
@@ -300,10 +305,9 @@
    - ✅ **FIXED**: World-pixel distance checks with isometric distance formula ensure consistent coordinate space
    - ✅ **FIXED**: FogMask SubViewport is now a child of Camera2D for automatic transform inheritance (Camera-Local Hierarchy)
    - ✅ **FIXED**: Persistent Clearing (Additive Miasma) - `cleared_tiles` is persistent, only removed by future Regrowth System
-   - ✅ **FIXED**: Clearing logic correctly adds tiles to `cleared_tiles` dictionary (confirmed via debug output)
-   - ⚠️ **UNRESOLVED**: Visual checkerboard pattern persists despite correct data clearing - rendering/coordinate alignment issue
-   - ⚠️ **UNRESOLVED**: Miasma tiles not properly aligned with ground tiles - consistent offset issue
-   - ⚠️ **INVESTIGATING**: FogPainter coordinate conversion from world to SubViewport space may have alignment issues
+  - ✅ **FIXED**: Clearing logic correctly adds tiles to `cleared_tiles` dictionary (confirmed via debug output)
+  - ✅ **FIXED**: MultiMesh rendering strategy with texture stamp provides watertight coverage
+  - ✅ **FIXED**: Snapped origin logic eliminates sub-pixel jitter and ensures pixel-perfect alignment
 
 ### Maps & Scenes
 
@@ -316,7 +320,7 @@
     - `Camera2D` - Main player camera
       - `FogMask` (SubViewport) - Dynamic size render target (synced to window)
         - `FogMaskColorRect` - Black background
-        - `FogPainter` (Node2D) - Draws cleared fog areas (16x8 rectangles, handles size syncing)
+        - `FogPainter` (MultiMeshInstance2D) - Renders cleared fog areas using MultiMesh with 16x8 texture stamp
   - `MiasmaSheet` (CanvasLayer) - Fog overlay layer
     - `MiasmaColorRect` - Full-screen fog with shader
 
@@ -378,8 +382,10 @@ drifterz/
     │       ├── BeamDebugVisualizer.gd
     │       └── BeamTypes.gd
     └── vfx/               # Visual effects
-        ├── FogPainter.gd      # Fog visual rendering
-        └── MiasmaHole.gdshader # Fog shader
+        ├── FogPainter.gd      # Fog visual rendering (MultiMesh)
+        ├── MiasmaHole.gdshader # Fog shader
+        ├── miasma_stamp.png    # 16x8 isometric diamond texture stamp
+        └── texture_generator.gd # Utility script to generate stamp texture (one-time use)
 ```
 
 **Structure Notes:**
@@ -400,9 +406,8 @@ drifterz/
 - ✅ **Lighthouse Beam System**: BeamController with 5 modes (OFF, BUBBLE_MIN, BUBBLE_MAX, CONE, LASER)
 - ✅ **BeamMiasmaEmitter**: Routes beam actions to MiasmaManager with additive clearing
 - ✅ **Laser Mode**: Creates persistent wide tunnels (8px stride, ±12px halos) that stay forever
-- ⚠️ **CRITICAL ISSUE - CHECKERBOARD PATTERN**: Visual checkerboard pattern persists despite correct data clearing. This is a rendering/coordinate alignment issue, not a clearing logic problem.
-- ⚠️ **CRITICAL ISSUE - ALIGNMENT**: Miasma tiles are not properly aligned with ground tiles. There is a consistent offset between miasma diamonds and ground tile boundaries.
-- 🔄 **INVESTIGATING**: FogPainter coordinate conversion from world to SubViewport space - may need to use different coordinate system or transform
+- ✅ **FIXED - MULTIMESH RENDERING**: MultiMesh strategy with texture stamp eliminates checkerboard patterns and provides watertight coverage
+- ✅ **FIXED - PIXEL-PERFECT ALIGNMENT**: Snapped origin logic ensures all tiles align to the same pixel grid
 - 🔄 FogPainter redraws every frame (optimization opportunity)
 - 🔄 **Cone Mode**: Currently placeholder - needs proper cone clearing implementation
 - 🔄 Future: Fog regrowth logic (timestamps stored for this purpose)

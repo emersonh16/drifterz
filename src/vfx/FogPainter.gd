@@ -16,12 +16,17 @@ func _ready() -> void:
 	# Set texture filter to Nearest for pixel-perfect rendering
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	
-	# Load the miasma stamp texture
-	var stamp_texture := load("res://src/vfx/miasma_stamp.png") as Texture2D
-	if stamp_texture:
-		texture = stamp_texture
+	# Load the stamp texture (use load() instead of preload() to handle missing file gracefully)
+	var stamp_tex := load("res://src/vfx/miasma_stamp.png") as Texture2D
+	if stamp_tex:
+		self.texture = stamp_tex
 	else:
 		push_error("FogPainter: Failed to load miasma_stamp.png. Please create a 16x8 white isometric diamond texture.")
+	
+	# Create CanvasItemMaterial for proper blending
+	var canvas_material := CanvasItemMaterial.new()
+	canvas_material.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
+	self.material = canvas_material
 	
 	# Ensure SubViewport size matches screen size for 1:1 resolution parity
 	var parent_viewport := get_parent() as SubViewport
@@ -81,9 +86,9 @@ func _update_multimesh() -> void:
 		var snapped_origin := screen_origin.floor()
 		
 		# Create 2D transform: position at snapped origin, no rotation, scale 1:1
-		var transform := Transform2D.IDENTITY
-		transform.origin = snapped_origin
+		var instance_transform := Transform2D.IDENTITY
+		instance_transform.origin = snapped_origin
 		
 		# Set the instance transform
-		_multimesh_resource.set_instance_transform_2d(instance_index, transform)
+		_multimesh_resource.set_instance_transform_2d(instance_index, instance_transform)
 		instance_index += 1

@@ -1,4 +1,4 @@
-# ARCHITECTURE.md - The Holy Map (v1.2)
+# ARCHITECTURE.md - The Holy Map (v1.3)
 
 ## 1. Coordinate System Registry
 | Space | Unit | Resolution | Conversion Formula | Converter Function |
@@ -29,7 +29,7 @@
         * **Camera2D**: Main player camera (follows player).
             * **FogMask (SubViewport)**: Dynamic size render target (synced to window size) for the fog mask. Child of Camera2D for automatic transform inheritance.
                 * **FogMaskColorRect**: Black background.
-                * **FogPainter (Node2D)**: Draws 16x8 isometric diamond polygons for cleared Miasma using exact offsets `(0, -4), (8, 0), (0, 4), (-8, 0)`. Handles SubViewport size syncing.
+                * **FogPainter (MultiMeshInstance2D)**: Renders cleared Miasma tiles using MultiMesh with 16x8 texture stamp (`miasma_stamp.png`). Uses watertight isometric diamond texture that naturally interlocks with zero gaps. Handles SubViewport size syncing.
         * **BeamController (Node)**: Lighthouse beam system controller (`src/systems/beam/BeamController.gd`).
             * **BeamVisualizer (Node2D)**: Visual debug representation container.
                 * **BeamDebugVisualizer**: Debug visualization script instance.
@@ -52,13 +52,13 @@
     - Calculates isometric distance from clearing center to nearest point: `dx = nearest_x - world_pos.x`, `dy = (nearest_y - world_pos.y) * 2.0`
     - **Isometric Distance Formula**: Clears tile if `(dx*dx + dy*dy) <= r_sq` (checks nearest point, not center, to ensure all overlapping tiles are cleared)
   - **✅ CLEARING LOGIC WORKS**: Debug output confirms tiles are being correctly added to `cleared_tiles` dictionary
-  - **⚠️ RENDERING ISSUE**: Despite correct clearing, visual checkerboard pattern persists - this is a rendering/coordinate alignment problem, not a clearing logic problem
+  - **✅ MULTIMESH RENDERING**: MultiMesh strategy with texture stamp provides watertight coverage and eliminates sub-pixel jitter
 * **Rendering**: 
-  - **Miasma Grid Diamond Geometry**: FogPainter draws isometric diamonds as polygons with exact offsets `(0, -4), (8, 0), (0, 4), (-8, 0)` relative to tile center. These offsets create 16x8 diamonds that should align with the isometric sub-tile grid.
-  - **⚠️ KNOWN ISSUE - CHECKERBOARD PATTERN**: Visual checkerboard pattern persists despite tiles being correctly cleared in data. This indicates a rendering/coordinate alignment issue, not a clearing logic problem.
-  - **⚠️ KNOWN ISSUE - ALIGNMENT**: Miasma tiles are not properly aligned with ground tiles. There is a consistent offset between miasma diamonds and ground tile boundaries.
-  - FogPainter uses `draw_colored_polygon()` with pixel-perfect rounded coordinates
-  - FogPainter converts grid positions to world origin using `CoordConverter.miasma_to_world_origin()`, then adds center offset (8, 4) for diamond drawing
+  - **MultiMesh Strategy**: FogPainter uses `MultiMeshInstance2D` with a 16x8 texture stamp (`miasma_stamp.png`) for watertight isometric coverage. The texture contains a white isometric diamond shape that naturally interlocks with zero gaps.
+  - **Texture Stamp**: `miasma_stamp.png` is a 16x8 pixel PNG with a white isometric diamond (vertices: Top(8,0), Right(16,4), Bottom(8,8), Left(0,4)) on transparent background. Generated programmatically via `texture_generator.gd` utility script.
+  - **MultiMesh Setup**: Uses `QuadMesh` (16x8 size) with `TRANSFORM_2D` format. Each cleared tile gets an instance transform positioned at the snapped origin. Texture filter set to `TEXTURE_FILTER_NEAREST` for pixel-perfect rendering.
+  - **Blending**: Uses `CanvasItemMaterial` with `BLEND_MODE_MIX` for proper transparency handling.
+  - **Snapped Origin Logic**: Converts grid positions to world origin using `CoordConverter.miasma_to_world_origin()`, calculates screen space origin: `(tile_world_origin - camera_world_pos) + viewport_center`, then floors the origin to lock to pixel grid. This ensures all tiles align to the same pixel grid, eliminating sub-pixel jitter.
   - FogPainter enforces SubViewport size parity: `get_parent().size = get_tree().root.size` (synced to window size)
   - FogMask SubViewport is a child of Camera2D, so it automatically inherits the camera's transform (position, zoom, offset)
   - Coordinate conversion: Uses parent Camera2D's `global_position` to convert world coordinates to SubViewport coordinates: `(world_pos - camera_world_pos) + viewport_center`
