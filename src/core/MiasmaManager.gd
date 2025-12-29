@@ -45,5 +45,43 @@ func clear_fog(world_pos: Vector2, radius: float) -> void:
 			# Clear tile only if within the elliptical radius (absolute world-pixel distance check)
 			if (dx*dx + dy*dy) <= r_sq:
 				# Store the time it was cleared (for future regrowth logic)
+				# Only add if not already cleared (additive clearing - matches JS clearedMap behavior)
 				if not cleared_tiles.has(tile_pos):
 					cleared_tiles[tile_pos] = Time.get_ticks_msec()
+
+# Port of raycast() laser path clearing from index.js
+# Clears a multi-layer tunnel along a path: Core (thick center) + Halos (side points)
+func clear_laser_path(origin: Vector2, direction: Vector2, length: float) -> void:
+	# Normalize direction vector
+	var dir_normalized := direction.normalized()
+	var perp := Vector2(-dir_normalized.y, dir_normalized.x)  # Perpendicular vector for halos
+	
+	# Stride: step size along the path (8px matches JS implementation)
+	const STRIDE: float = 8.0
+	
+	# Core clearing: thick center line (radius 16)
+	const CORE_RADIUS: float = 16.0
+	
+	# Halo clearing: side points (radius 8)
+	const HALO_RADIUS: float = 8.0
+	const HALO_OFFSET: float = 24.0  # Distance from center for halo points
+	
+	# Step along the path from origin to end
+	var distance: float = 0.0
+	while distance <= length:
+		var step_pos := origin + dir_normalized * distance
+		
+		# Clear core at this step
+		clear_fog(step_pos, CORE_RADIUS)
+		
+		# Clear halos: two points perpendicular to the direction
+		var halo_left := step_pos + perp * HALO_OFFSET
+		var halo_right := step_pos - perp * HALO_OFFSET
+		clear_fog(halo_left, HALO_RADIUS)
+		clear_fog(halo_right, HALO_RADIUS)
+		
+		distance += STRIDE
+	
+	# Ensure the tip is cleared (final position)
+	var tip_pos := origin + dir_normalized * length
+	clear_fog(tip_pos, CORE_RADIUS)
