@@ -13,15 +13,19 @@
   - Tile size constants: `TILE_SIZE_WIDTH = 16`, `TILE_SIZE_HEIGHT = 8` (miasma tiles are 1/4 size of ground tiles)
   - **16 Miasma sub-tiles fit perfectly inside 1 Ground tile (64x32)**
   - Uses `CoordConverter.world_to_miasma()` and `CoordConverter.miasma_to_world_center()` for centralized coordinate conversion
-  - **Isometric Distance Formula**: `(dx*dx + (dy*2.0)*(dy*2.0)) <= r_sq` where `dy` is scaled by 2.0 for isometric space
-  - Uses +4px radius buffer to prevent missing edge tiles due to 2:1 isometric ratio
-  - Loop ranges adjusted for ellipse: X uses `ceil((radius + 4.0) / 16.0)`, Y uses `ceil((radius + 4.0) / 8.0)`
+  - **Isometric Distance Formula**: Checks distance to nearest point on tile, not center: `(dx*dx + dy*dy) <= r_sq` where `dy` is scaled by 2.0 for isometric space
+  - Uses +16px radius buffer in loop ranges to ensure all overlapping tiles are checked: X uses `ceil((radius + 16.0) / 16.0)`, Y uses `ceil((radius + 16.0) / 8.0)`
+  - **✅ CLEARING LOGIC CONFIRMED WORKING**: Debug output shows tiles are correctly added to `cleared_tiles` dictionary
+  - **⚠️ RENDERING ISSUE**: Despite correct clearing, visual checkerboard pattern persists - this is a rendering/coordinate alignment problem
 
 - **FogPainter** (`src/vfx/FogPainter.gd`): Draws the visual representation of cleared fog
   - Extends Node2D, draws 16x8 isometric diamond polygons for each cleared tile
-  - **Diamond Geometry Requirement**: MUST use exact diamond polygon offsets: `(0, -4), (8, 0), (0, 4), (-8, 0)` from tile center to ensure seamless tiling and perfect alignment with ground tiles
+  - **Diamond Geometry**: Uses exact diamond polygon offsets: `(0, -4), (8, 0), (0, 4), (-8, 0)` from tile center
+  - **⚠️ KNOWN ISSUE - CHECKERBOARD PATTERN**: Visual checkerboard pattern persists despite tiles being correctly cleared. Debug confirms tiles are in `cleared_tiles` dictionary, indicating a rendering/coordinate alignment issue.
+  - **⚠️ KNOWN ISSUE - ALIGNMENT**: Miasma tiles are not properly aligned with ground tiles. There is a consistent offset between miasma diamonds and ground tile boundaries.
+  - Uses `CoordConverter.miasma_to_world_origin()` to get tile origin, then adds center offset (8, 4) for diamond drawing
+  - Converts world coordinates to SubViewport coordinates: `(world_pos - camera_world_pos) + viewport_center`
   - Uses pixel-perfect rounded coordinates to prevent sub-pixel gaps
-  - Uses `CoordConverter.miasma_to_world_center()` to convert grid positions to world coordinates
   - Redraws every frame (optimization planned for later)
   - Uses `MiasmaManager.cleared_tiles` persistent dictionary to determine what to draw
 
@@ -97,11 +101,14 @@
 
 - **CoordConverter** (`src/core/CoordConverter.gd`): Centralized utility for coordinate transformations
   - `world_to_miasma(pos: Vector2) -> Vector2i`: Converts world pixel coordinates to 16x8 miasma grid coordinates
-    - **Pixel-Perfect Formula**: `Vector2i(floor(pos.x / 16.0), floor(pos.y / 8.0))` - **MUST use explicit float division** to prevent the "50% Checkerboard" alignment bug
+    - **Pixel-Perfect Formula**: `Vector2i(floor(pos.x / 16.0), floor(pos.y / 8.0))` - **MUST use explicit float division** to prevent alignment bugs
     - Used by `MiasmaManager.clear_fog()` for coordinate conversion
+  - `miasma_to_world_origin(grid_pos: Vector2i) -> Vector2`: Converts miasma grid coordinates to world origin/top-left position
+    - **Alignment**: Formula `Vector2(grid_pos.x * 16.0, grid_pos.y * 8.0)` ensures miasma (0,0) = ground (0,0) = world (0,0)
+    - Used by `MiasmaManager.clear_fog()` for overlap checking and `FogPainter._draw()` for rendering
   - `miasma_to_world_center(grid_pos: Vector2i) -> Vector2`: Converts miasma grid coordinates to world center position
-    - Formula: `Vector2(grid_pos.x * 16 + 8, grid_pos.y * 8 + 4)`
-    - Used by `MiasmaManager.clear_fog()` and `FogPainter._draw()` for positioning
+    - Formula: `Vector2(origin.x + 8.0, origin.y + 4.0)` where origin is from `miasma_to_world_origin()`
+    - Used by `MiasmaManager.clear_fog()` for distance calculations
   - `to_isometric(vector: Vector2) -> Vector2`: Isometric projection utility
     - Formula: `Vector2(vector.x - vector.y, (vector.x + vector.y) * 0.5)`
     - Note: Currently not actively used in fog system
@@ -127,11 +134,14 @@
    - Stores cleared tiles in `cleared_tiles` dictionary
    - **Result**: Solid elliptical clearing with no checkerboard pattern
 3. `FogPainter` (in FogMask SubViewport) draws 16x8 isometric diamond polygons for each cleared tile:
-   - Converts grid positions to world centers using `CoordConverter.miasma_to_world_center()`
+   - Converts grid positions to world origin using `CoordConverter.miasma_to_world_origin()`
+   - Converts world coordinates to SubViewport coordinates: `(world_pos - camera_world_pos) + viewport_center`
+   - Adds center offset (8, 4) to get diamond center position
    - Draws isometric diamonds using exact polygon offsets: `(0, -4), (8, 0), (0, 4), (-8, 0)` relative to tile center
    - Uses pixel-perfect rounded coordinates to prevent sub-pixel gaps
    - Enforces resolution parity: SubViewport size = window size (`get_tree().root.size`)
    - Since FogMask is a child of Camera2D, the camera's transform is automatically applied
+   - **⚠️ KNOWN ISSUE**: Visual checkerboard pattern and alignment issues persist despite correct data clearing
 4. `MiasmaHole` shader:
    - Samples FogMask texture using `SCREEN_UV` (screen-space sampling)
    - Since FogMask is camera-relative, the SubViewport output aligns 1:1 with screen space
@@ -289,9 +299,11 @@
    - ✅ **FIXED**: Miasma grid uses proper 16x8 tile dimensions with pixel-perfect floor division
    - ✅ **FIXED**: World-pixel distance checks with isometric distance formula ensure consistent coordinate space
    - ✅ **FIXED**: FogMask SubViewport is now a child of Camera2D for automatic transform inheritance (Camera-Local Hierarchy)
-   - ✅ **FIXED**: FogPainter uses isometric diamond polygons with exact offsets `(0, -4), (8, 0), (0, 4), (-8, 0)` for seamless tiling
-   - ✅ **FIXED**: Shader uses SCREEN_UV for correct screen-space alignment
    - ✅ **FIXED**: Persistent Clearing (Additive Miasma) - `cleared_tiles` is persistent, only removed by future Regrowth System
+   - ✅ **FIXED**: Clearing logic correctly adds tiles to `cleared_tiles` dictionary (confirmed via debug output)
+   - ⚠️ **UNRESOLVED**: Visual checkerboard pattern persists despite correct data clearing - rendering/coordinate alignment issue
+   - ⚠️ **UNRESOLVED**: Miasma tiles not properly aligned with ground tiles - consistent offset issue
+   - ⚠️ **INVESTIGATING**: FogPainter coordinate conversion from world to SubViewport space may have alignment issues
 
 ### Maps & Scenes
 
@@ -381,14 +393,16 @@ drifterz/
 ## Current State & Next Steps
 - ✅ Basic player movement implemented
 - ✅ **Persistent Clearing (Additive Miasma)**: Fog clearing system uses persistent sparse dictionary - tiles are only added, never removed except by future Regrowth System
-- ✅ Fog clearing system working with isometric distance formula: `(dx*dx + (dy*2.0)*(dy*2.0)) <= r_sq`
+- ✅ Fog clearing logic working correctly - tiles are properly added to `cleared_tiles` dictionary (confirmed via debug)
 - ✅ Shader-based fog rendering functional
 - ✅ Coordinate conversions centralized in CoordConverter with pixel-perfect floor division
-- ✅ FogPainter draws seamless 16x8 isometric diamonds with exact offsets `(0, -4), (8, 0), (0, 4), (-8, 0)`
 - ✅ **Camera-Local Hierarchy**: FogMask SubViewport as child of Camera2D eliminates tracking drift
 - ✅ **Lighthouse Beam System**: BeamController with 5 modes (OFF, BUBBLE_MIN, BUBBLE_MAX, CONE, LASER)
 - ✅ **BeamMiasmaEmitter**: Routes beam actions to MiasmaManager with additive clearing
 - ✅ **Laser Mode**: Creates persistent wide tunnels (8px stride, ±12px halos) that stay forever
+- ⚠️ **CRITICAL ISSUE - CHECKERBOARD PATTERN**: Visual checkerboard pattern persists despite correct data clearing. This is a rendering/coordinate alignment issue, not a clearing logic problem.
+- ⚠️ **CRITICAL ISSUE - ALIGNMENT**: Miasma tiles are not properly aligned with ground tiles. There is a consistent offset between miasma diamonds and ground tile boundaries.
+- 🔄 **INVESTIGATING**: FogPainter coordinate conversion from world to SubViewport space - may need to use different coordinate system or transform
 - 🔄 FogPainter redraws every frame (optimization opportunity)
 - 🔄 **Cone Mode**: Currently placeholder - needs proper cone clearing implementation
 - 🔄 Future: Fog regrowth logic (timestamps stored for this purpose)
