@@ -48,7 +48,7 @@ color = Color(0, 0, 0, 1)
 [node name="MaskSync" type="Camera2D" parent="DerelictLogic/Camera2D/FogMask"]
 script = ExtResource("6_masksync")
 
-[node name="FogPainter" type="Node2D" parent="DerelictLogic/Camera2D/FogMask"]
+[node name="FogPainter" type="MultiMeshInstance2D" parent="DerelictLogic/Camera2D/FogMask"]
 script = ExtResource("5_36ipd")
 
 [node name="MiasmaSheet" type="CanvasLayer" parent="."]
