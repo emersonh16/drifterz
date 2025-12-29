@@ -7,19 +7,24 @@ func _draw() -> void:
 	if MiasmaManager.cleared_tiles.is_empty():
 		return
 
-	var tile_size := MiasmaManager.TILE_SIZE
+	var tile_width := MiasmaManager.TILE_SIZE_WIDTH
+	var tile_height := MiasmaManager.TILE_SIZE_HEIGHT
 
-	# Compute bubble center (average of cleared tiles)
-	var sum := Vector2.ZERO
+	# Draw 16x8 isometric diamonds for each cleared tile
 	for grid_pos in MiasmaManager.cleared_tiles.keys():
-		sum += Vector2(grid_pos.x, grid_pos.y)
-	var center_grid := sum / MiasmaManager.cleared_tiles.size()
-	var center_world := center_grid * tile_size + Vector2(tile_size * 0.5, tile_size * 0.5)
-
-	# Compute bubble radius (farthest cleared tile)
-	var max_dist := 0.0
-	for grid_pos in MiasmaManager.cleared_tiles.keys():
-		var world_pos := Vector2(grid_pos.x, grid_pos.y) * tile_size + Vector2(tile_size * 0.5, tile_size * 0.5)
-		max_dist = max(max_dist, center_world.distance_to(world_pos))
-
-	draw_circle(center_world, max_dist + tile_size * 0.5, Color.WHITE)
+		# Convert grid position to world position (center of tile)
+		var world_pos := Vector2(
+			grid_pos.x * tile_width + tile_width * 0.5,
+			grid_pos.y * tile_height + tile_height * 0.5
+		)
+		
+		# Draw isometric diamond shape (16x8)
+		# Diamond points: top, right, bottom, left
+		var points := PackedVector2Array([
+			world_pos + Vector2(0, -tile_height * 0.5),  # Top
+			world_pos + Vector2(tile_width * 0.5, 0),     # Right
+			world_pos + Vector2(0, tile_height * 0.5),     # Bottom
+			world_pos + Vector2(-tile_width * 0.5, 0)     # Left
+		])
+		
+		draw_colored_polygon(points, Color.WHITE)
