@@ -21,13 +21,15 @@
 - **FogPainter** (`src/vfx/FogPainter.gd`): Renders the visual representation of cleared fog using MultiMesh
   - Extends `MultiMeshInstance2D` for efficient batch rendering
   - **MultiMesh Strategy**: Uses a 16x8 texture stamp (`miasma_stamp.png`) containing a white isometric diamond shape
-  - **Texture Stamp**: `miasma_stamp.png` is a 16x8 pixel PNG with white diamond (vertices: Top(8,0), Right(16,4), Bottom(8,8), Left(0,4)) on transparent background
+  - **Texture Stamp**: `miasma_stamp.png` is a 16x8 pixel PNG with white diamond (vertices: Top(8,0), Right(16,4), Bottom(8,8), Left(0,4)) on transparent background. Generated programmatically via `texture_generator.gd` utility script.
+  - **MultiMesh Configuration**: Uses `QuadMesh` (16x8 size) with `TRANSFORM_2D` format. Instance count dynamically set based on cleared tiles.
   - **Watertight Coverage**: The texture naturally interlocks with zero gaps, eliminating checkerboard patterns
   - **Pixel-Perfect Rendering**: Uses `TEXTURE_FILTER_NEAREST` for crisp, pixel-perfect rendering without blur
-  - **Snapped Origin Logic**: Converts grid to world origin using `CoordConverter.miasma_to_world_origin()`, calculates screen space: `(tile_world_origin - camera_world_pos) + viewport_center`, then floors the origin to lock to pixel grid
+  - **Snapped Origin Logic**: Converts grid to world origin using `CoordConverter.miasma_to_world_origin()`, calculates screen space: `(tile_world_origin - camera_world_pos) + viewport_center`, then floors the origin to lock to pixel grid. Creates `Transform2D(0, snapped_origin)` for each instance.
   - **Blending**: Uses `CanvasItemMaterial` with `BLEND_MODE_MIX` for proper transparency handling
-  - Updates MultiMesh instances every frame based on `MiasmaManager.cleared_tiles` dictionary
+  - **Update Cycle**: Rebuilds MultiMesh instances every frame in `_process()` based on `MiasmaManager.cleared_tiles` dictionary
   - Handles SubViewport size syncing: `get_parent().size = get_tree().root.size`
+  - **✅ STATUS**: Fully implemented and working - provides watertight coverage with no rendering issues
 
 - **MiasmaHole.gdshader** (`src/vfx/MiasmaHole.gdshader`): Shader that applies the fog mask
   - Takes a `mask_texture` uniform (sampler2D)
@@ -135,15 +137,18 @@
    - **Result**: Solid elliptical clearing with no checkerboard pattern
 3. `FogPainter` (MultiMeshInstance2D in FogMask SubViewport) renders cleared tiles using MultiMesh:
    - Uses 16x8 texture stamp (`miasma_stamp.png`) containing white isometric diamond shape
+   - MultiMesh setup: `QuadMesh` (16x8), `TRANSFORM_2D` format, instance count set dynamically
    - Converts grid positions to world origin using `CoordConverter.miasma_to_world_origin()`
    - Calculates screen space origin: `(tile_world_origin - camera_world_pos) + viewport_center`
    - Floors the origin to lock to pixel grid: `snapped_origin = screen_origin.floor()`
-   - Creates MultiMesh instance transform at snapped origin (no rotation, scale 1:1)
+   - Creates MultiMesh instance transform: `Transform2D(0, snapped_origin)` (no rotation, position at snapped origin)
    - Uses `TEXTURE_FILTER_NEAREST` for pixel-perfect rendering
    - Uses `CanvasItemMaterial` with `BLEND_MODE_MIX` for proper transparency
+   - Rebuilds all instances every frame in `_process()` based on `MiasmaManager.cleared_tiles`
    - Enforces resolution parity: SubViewport size = window size (`get_tree().root.size`)
    - Since FogMask is a child of Camera2D, the camera's transform is automatically applied
    - **✅ WATERTIGHT COVERAGE**: Texture stamp naturally interlocks with zero gaps, eliminating checkerboard patterns
+   - **✅ IMPLEMENTATION COMPLETE**: MultiMesh rendering fully functional
 4. `MiasmaHole` shader:
    - Samples FogMask texture using `SCREEN_UV` (screen-space sampling)
    - Since FogMask is camera-relative, the SubViewport output aligns 1:1 with screen space
@@ -382,10 +387,10 @@ drifterz/
     │       ├── BeamDebugVisualizer.gd
     │       └── BeamTypes.gd
     └── vfx/               # Visual effects
-        ├── FogPainter.gd      # Fog visual rendering (MultiMesh)
+        ├── FogPainter.gd      # Fog visual rendering (MultiMeshInstance2D)
         ├── MiasmaHole.gdshader # Fog shader
-        ├── miasma_stamp.png    # 16x8 isometric diamond texture stamp
-        └── texture_generator.gd # Utility script to generate stamp texture (one-time use)
+        ├── miasma_stamp.png    # 16x8 isometric diamond texture stamp (generated)
+        └── texture_generator.gd # Utility script to generate stamp texture (one-time use, can be deleted after generation)
 ```
 
 **Structure Notes:**

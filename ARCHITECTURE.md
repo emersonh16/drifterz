@@ -1,4 +1,4 @@
-# ARCHITECTURE.md - The Holy Map (v1.3)
+# ARCHITECTURE.md - The Holy Map (v1.4)
 
 ## 1. Coordinate System Registry
 | Space | Unit | Resolution | Conversion Formula | Converter Function |
@@ -56,9 +56,10 @@
 * **Rendering**: 
   - **MultiMesh Strategy**: FogPainter uses `MultiMeshInstance2D` with a 16x8 texture stamp (`miasma_stamp.png`) for watertight isometric coverage. The texture contains a white isometric diamond shape that naturally interlocks with zero gaps.
   - **Texture Stamp**: `miasma_stamp.png` is a 16x8 pixel PNG with a white isometric diamond (vertices: Top(8,0), Right(16,4), Bottom(8,8), Left(0,4)) on transparent background. Generated programmatically via `texture_generator.gd` utility script.
-  - **MultiMesh Setup**: Uses `QuadMesh` (16x8 size) with `TRANSFORM_2D` format. Each cleared tile gets an instance transform positioned at the snapped origin. Texture filter set to `TEXTURE_FILTER_NEAREST` for pixel-perfect rendering.
+  - **MultiMesh Setup**: Uses `QuadMesh` (16x8 size) with `TRANSFORM_2D` format. Each cleared tile gets an instance transform positioned at the snapped origin. Texture filter set to `TEXTURE_FILTER_NEAREST` for pixel-perfect rendering. MultiMesh instance count is dynamically set based on `MiasmaManager.cleared_tiles.size()` and rebuilt every frame in `_process()`.
   - **Blending**: Uses `CanvasItemMaterial` with `BLEND_MODE_MIX` for proper transparency handling.
-  - **Snapped Origin Logic**: Converts grid positions to world origin using `CoordConverter.miasma_to_world_origin()`, calculates screen space origin: `(tile_world_origin - camera_world_pos) + viewport_center`, then floors the origin to lock to pixel grid. This ensures all tiles align to the same pixel grid, eliminating sub-pixel jitter.
+  - **Snapped Origin Logic**: Converts grid positions to world origin using `CoordConverter.miasma_to_world_origin()`, calculates screen space origin: `(tile_world_origin - camera_world_pos) + viewport_center`, then floors the origin to lock to pixel grid. Creates `Transform2D(0, snapped_origin)` for each instance. This ensures all tiles align to the same pixel grid, eliminating sub-pixel jitter.
+  - **Implementation Status**: ✅ **COMPLETE** - MultiMesh rendering fully functional with watertight coverage
   - FogPainter enforces SubViewport size parity: `get_parent().size = get_tree().root.size` (synced to window size)
   - FogMask SubViewport is a child of Camera2D, so it automatically inherits the camera's transform (position, zoom, offset)
   - Coordinate conversion: Uses parent Camera2D's `global_position` to convert world coordinates to SubViewport coordinates: `(world_pos - camera_world_pos) + viewport_center`

@@ -1,11 +1,8 @@
-[gd_scene load_steps=12 format=3 uid="uid://c3cggfyf14ghj"]
+[gd_scene load_steps=4 format=3 uid="uid://c3cggfyf14ghj"]
 
 [ext_resource type="Script" uid="uid://bp1c45262n86m" path="res://src/scenes/World.gd" id="1_0qwtu"]
 [ext_resource type="PackedScene" uid="uid://dsksrds112u2s" path="res://src/entities/DerelictLogic.tscn" id="1_tp5op"]
 [ext_resource type="Texture2D" uid="uid://bqkb4sb6pdwp4" path="res://src/assets/sprites/meadow2.png" id="2_xlegt"]
-[ext_resource type="Shader" path="res://src/vfx/MiasmaHole.gdshader" id="4_usxdn"]
-[ext_resource type="Script" path="res://src/vfx/FogPainter.gd" id="5_36ipd"]
-[ext_resource type="Script" path="res://src/vfx/MaskSync.gd" id="6_masksync"]
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_0qwtu"]
 texture = ExtResource("2_xlegt")
 texture_region_size = Vector2i(64, 32)
@@ -16,14 +13,6 @@ tile_shape = 1
 tile_size = Vector2i(64, 32)
 sources/0 = SubResource("TileSetAtlasSource_0qwtu")
 
-[sub_resource type="ViewportTexture" id="ViewportTexture_usxdn"]
-viewport_path = NodePath("DerelictLogic/Camera2D/FogMask")
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_jvefd"]
-resource_local_to_scene = true
-shader = ExtResource("4_usxdn")
-shader_parameter/mask_texture = SubResource("ViewportTexture_usxdn")
-
 [node name="World" type="Node2D"]
 script = ExtResource("1_0qwtu")
 
@@ -32,34 +21,3 @@ tile_set = SubResource("TileSet_t101k")
 
 [node name="DerelictLogic" parent="." instance=ExtResource("1_tp5op")]
 position = Vector2(500, 300)
-
-[node name="FogMask" type="SubViewport" parent="DerelictLogic/Camera2D"]
-size = Vector2i(1152, 648)
-render_target_update_mode = 4
-
-[node name="FogMaskColorRect" type="ColorRect" parent="DerelictLogic/Camera2D/FogMask"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0, 0, 0, 1)
-
-[node name="MaskSync" type="Camera2D" parent="DerelictLogic/Camera2D/FogMask"]
-script = ExtResource("6_masksync")
-
-[node name="FogPainter" type="MultiMeshInstance2D" parent="DerelictLogic/Camera2D/FogMask"]
-script = ExtResource("5_36ipd")
-
-[node name="MiasmaSheet" type="CanvasLayer" parent="."]
-follow_viewport_enabled = false
-
-[node name="MiasmaColorRect" type="ColorRect" parent="MiasmaSheet"]
-material = SubResource("ShaderMaterial_jvefd")
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.23529412, 0.3529412, 0.47058824, 1)

@@ -62,4 +62,3 @@ func _point_in_polygon(point: Vector2, vertices: PackedVector2Array) -> bool:
 		j = i
 	
 	return inside
-

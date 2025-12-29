@@ -12,7 +12,4 @@ func _physics_process(_delta: float) -> void:
 	
 	# 3. Move the Body
 	move_and_slide()
-	
-	# 4. Broadcast the Position (The SignalBus Way) 
-	if velocity != Vector2.ZERO:
-		SignalBus.derelict_moved.emit(global_position)
+
