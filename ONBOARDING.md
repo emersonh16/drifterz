@@ -7,19 +7,23 @@
 
 ### 1. Miasma (Fog) System
 - **MiasmaManager** (`src/core/MiasmaManager.gd`): Autoload singleton that manages the fog clearing system
-  - Maintains a sparse dictionary of cleared tiles: `cleared_tiles: Dictionary` (key: Vector2i grid coordinates, value: int timestamp in msec)
-  - Clears fog using world-pixel distance checks for elliptical clearing
+  - **Persistent Clearing (Additive Miasma)**: Maintains a persistent sparse dictionary of cleared tiles: `cleared_tiles: Dictionary` (key: Vector2i grid coordinates, value: int timestamp in msec)
+  - **Source of Truth**: The `cleared_tiles` dictionary is the persistent data model. Tiles are only added, never removed except by the (future) Regrowth System. This enables cumulative, frame-persistent fog clearing.
+  - Clears fog using world-pixel distance checks with isometric distance formula for elliptical clearing
   - Tile size constants: `TILE_SIZE_WIDTH = 16`, `TILE_SIZE_HEIGHT = 8` (miasma tiles are 1/4 size of ground tiles)
+  - **16 Miasma sub-tiles fit perfectly inside 1 Ground tile (64x32)**
   - Uses `CoordConverter.world_to_miasma()` and `CoordConverter.miasma_to_world_center()` for centralized coordinate conversion
-  - Distance calculation: Uses world pixels with Y-axis scaled by 2.0 for isometric space: `(dx*dx + dy*dy) <= r_sq`
-  - Loop ranges adjusted for ellipse: X uses `ceil(radius / 16.0)`, Y uses `ceil(radius / 8.0)`
+  - **Isometric Distance Formula**: `(dx*dx + (dy*2.0)*(dy*2.0)) <= r_sq` where `dy` is scaled by 2.0 for isometric space
+  - Uses +4px radius buffer to prevent missing edge tiles due to 2:1 isometric ratio
+  - Loop ranges adjusted for ellipse: X uses `ceil((radius + 4.0) / 16.0)`, Y uses `ceil((radius + 4.0) / 8.0)`
 
 - **FogPainter** (`src/vfx/FogPainter.gd`): Draws the visual representation of cleared fog
   - Extends Node2D, draws 16x8 isometric diamond polygons for each cleared tile
-  - Uses hardcoded diamond points: `(0, -4), (8, 0), (0, 4), (-8, 0)` from tile center to ensure no gaps
+  - **Diamond Geometry Requirement**: MUST use exact diamond polygon offsets: `(0, -4), (8, 0), (0, 4), (-8, 0)` from tile center to ensure seamless tiling and perfect alignment with ground tiles
+  - Uses pixel-perfect rounded coordinates to prevent sub-pixel gaps
   - Uses `CoordConverter.miasma_to_world_center()` to convert grid positions to world coordinates
   - Redraws every frame (optimization planned for later)
-  - Uses `MiasmaManager.cleared_tiles` dictionary to determine what to draw
+  - Uses `MiasmaManager.cleared_tiles` persistent dictionary to determine what to draw
 
 - **MiasmaHole.gdshader** (`src/vfx/MiasmaHole.gdshader`): Shader that applies the fog mask
   - Takes a `mask_texture` uniform (sampler2D)
@@ -29,10 +33,12 @@
   - Inverts the mask (1.0 - mask_sample.r) to control alpha/visibility
   - Applied to a ColorRect that covers the entire screen
 
-- **FogMask SubViewport Architecture**: The FogMask SubViewport is now a child of the main Camera2D
-  - This allows automatic transform inheritance - the viewport naturally follows the camera
-  - No separate sync script needed - the camera's transform is automatically applied
+- **FogMask SubViewport Architecture (Camera-Local Hierarchy)**: The FogMask SubViewport is a child of the main Camera2D
+  - **Definitive Solution for Tracking Drift**: This architecture eliminates coordinate tracking drift by leveraging automatic transform inheritance
+  - The viewport naturally follows the camera - no separate sync script needed
+  - The camera's transform (position, zoom, offset) is automatically applied to all children
   - FogPainter handles SubViewport size syncing: `get_parent().size = get_tree().root.size` (matches window size)
+  - This is the **definitive fix** for camera-relative fog mask rendering
 
 ### 2. Player System
 - **DerelictLogic** (`src/entities/DerelictLogic.gd`): The player character
@@ -62,7 +68,7 @@
 
 - **CoordConverter** (`src/core/CoordConverter.gd`): Centralized utility for coordinate transformations
   - `world_to_miasma(pos: Vector2) -> Vector2i`: Converts world pixel coordinates to 16x8 miasma grid coordinates
-    - Formula: `Vector2i(floor(pos.x / 16), floor(pos.y / 8))`
+    - **Pixel-Perfect Formula**: `Vector2i(floor(pos.x / 16.0), floor(pos.y / 8.0))` - **MUST use explicit float division** to prevent the "50% Checkerboard" alignment bug
     - Used by `MiasmaManager.clear_fog()` for coordinate conversion
   - `miasma_to_world_center(grid_pos: Vector2i) -> Vector2`: Converts miasma grid coordinates to world center position
     - Formula: `Vector2(grid_pos.x * 16 + 8, grid_pos.y * 8 + 4)`
@@ -88,12 +94,13 @@
    - For each tile in bounding box:
      - Gets tile's world center: `t_world = CoordConverter.miasma_to_world_center(tile_pos)`
      - Calculates world-pixel distance: `dx = t_world.x - world_pos.x`, `dy = (t_world.y - world_pos.y) * 2.0` (isometric flattening)
-     - Clears tile only if `(dx*dx + dy*dy) <= r_sq` (absolute world-pixel distance check)
+     - Clears tile only if `(dx*dx + (dy*2.0)*(dy*2.0)) <= r_sq` (isometric distance formula with Y-axis 2.0x scaling)
    - Stores cleared tiles in `cleared_tiles` dictionary
    - **Result**: Solid elliptical clearing with no checkerboard pattern
-3. `FogPainter` (in FogMask SubViewport) draws 16x8 rectangles for each cleared tile:
+3. `FogPainter` (in FogMask SubViewport) draws 16x8 isometric diamond polygons for each cleared tile:
    - Converts grid positions to world centers using `CoordConverter.miasma_to_world_center()`
-   - Draws full-coverage rectangles: `Rect2(world_center - Vector2(8, 4), Vector2(16, 8))`
+   - Draws isometric diamonds using exact polygon offsets: `(0, -4), (8, 0), (0, 4), (-8, 0)` relative to tile center
+   - Uses pixel-perfect rounded coordinates to prevent sub-pixel gaps
    - Enforces resolution parity: SubViewport size = window size (`get_tree().root.size`)
    - Since FogMask is a child of Camera2D, the camera's transform is automatically applied
 4. `MiasmaHole` shader:
@@ -112,6 +119,8 @@
 ## Coordinate Systems Audit
 
 **⚠️ COMPLEXITY WARNING: This project uses multiple overlapping coordinate systems that can cause confusion. This section documents all of them.**
+
+**⚠️ COORDINATE INTEGRITY RULE**: All world-to-grid conversions **MUST use explicit float division with floor()** to prevent the "50% Checkerboard" alignment bug. Example: `floor(pos.x / 16.0)` not `floor(pos.x / 16)`. This ensures pixel-perfect alignment of the $16 \times 8$ isometric grid.
 
 ### 1. World/Global Coordinates (Vector2)
 - **Type**: `Vector2` (float-based, pixel coordinates)
@@ -248,11 +257,12 @@
 
 3. **Coordinate System Status**:
    - ✅ **FIXED**: Coordinate conversions are now centralized in `CoordConverter`
-   - ✅ **FIXED**: Miasma grid uses proper 16x8 tile dimensions
-   - ✅ **FIXED**: World-pixel distance checks ensure consistent coordinate space
-   - ✅ **FIXED**: FogMask SubViewport is now a child of Camera2D for automatic transform inheritance
-   - ✅ **FIXED**: FogPainter uses rectangles for full coverage and handles size syncing
+   - ✅ **FIXED**: Miasma grid uses proper 16x8 tile dimensions with pixel-perfect floor division
+   - ✅ **FIXED**: World-pixel distance checks with isometric distance formula ensure consistent coordinate space
+   - ✅ **FIXED**: FogMask SubViewport is now a child of Camera2D for automatic transform inheritance (Camera-Local Hierarchy)
+   - ✅ **FIXED**: FogPainter uses isometric diamond polygons with exact offsets `(0, -4), (8, 0), (0, 4), (-8, 0)` for seamless tiling
    - ✅ **FIXED**: Shader uses SCREEN_UV for correct screen-space alignment
+   - ✅ **FIXED**: Persistent Clearing (Additive Miasma) - `cleared_tiles` is persistent, only removed by future Regrowth System
 
 ### Maps & Scenes
 
@@ -331,11 +341,12 @@ drifterz/
 
 ## Current State & Next Steps
 - ✅ Basic player movement implemented
-- ✅ Fog clearing system working with world-pixel distance checks
+- ✅ **Persistent Clearing (Additive Miasma)**: Fog clearing system uses persistent sparse dictionary - tiles are only added, never removed except by future Regrowth System
+- ✅ Fog clearing system working with isometric distance formula: `(dx*dx + (dy*2.0)*(dy*2.0)) <= r_sq`
 - ✅ Shader-based fog rendering functional
-- ✅ Coordinate conversions centralized in CoordConverter
-- ✅ FogPainter draws seamless 16x8 isometric diamonds
-- ✅ MaskSync camera properly set up in scene
+- ✅ Coordinate conversions centralized in CoordConverter with pixel-perfect floor division
+- ✅ FogPainter draws seamless 16x8 isometric diamonds with exact offsets `(0, -4), (8, 0), (0, 4), (-8, 0)`
+- ✅ **Camera-Local Hierarchy**: FogMask SubViewport as child of Camera2D eliminates tracking drift
 - 🔄 FogPainter redraws every frame (optimization opportunity)
 - 🔄 Future: Fog regrowth logic (timestamps stored for this purpose)
 
@@ -347,9 +358,13 @@ drifterz/
 - **SubViewport Pattern**: Fog mask rendered to separate viewport for shader access
 
 ## Notes for Development
+- **Persistent Clearing Standard**: The fog system uses "Additive Miasma" - `cleared_tiles` is persistent and cumulative. Tiles are only removed by the future Regrowth System, never by frame-reset or clearing operations.
 - The fog system is designed to be extensible (timestamps stored for regrowth)
 - Coordinate conversions are centralized in `CoordConverter` for consistency
-- Fog clearing uses world-pixel distance checks with Y-axis scaling (2.0x) for isometric elliptical clearing
+- **Coordinate Integrity**: All world-to-grid conversions MUST use explicit float division: `floor(pos.x / 16.0)` not `floor(pos.x / 16)` to prevent checkerboard alignment bugs
+- Fog clearing uses isometric distance formula: `(dx*dx + (dy*2.0)*(dy*2.0)) <= r_sq` with +4px radius buffer to prevent missing edge tiles
+- **Camera-Local Hierarchy**: FogMask SubViewport as child of Camera2D is the definitive solution for eliminating tracking drift
 - Performance optimization needed: FogPainter redraws entire dictionary every frame
 - The game uses Godot 4.5 with Forward Plus rendering
+- **Visual Alignment**: 16 Miasma sub-tiles (16x8 each) fit perfectly inside 1 Ground tile (64x32)
 

@@ -23,12 +23,15 @@ func clear_fog(world_pos: Vector2, radius: float) -> void:
 	# Convert World Position -> Miasma Grid Coordinates using centralized converter
 	var center_grid: Vector2i = CoordConverter.world_to_miasma(world_pos)
 	
-	# Use absolute world pixels for distance calculation
-	var r_sq: float = radius * radius
+	# Add +4px buffer to radius to prevent missing edge tiles due to 2:1 isometric ratio
+	# The elliptical distance check with Y-axis 2.0x scaling can discard sub-tiles on the edge
+	var buffered_radius: float = radius + 4.0
+	var r_sq: float = buffered_radius * buffered_radius
 	
 	# Set loop ranges to cover the full ellipse (different for X and Y due to isometric)
-	var x_range: int = ceil(radius / 16.0)
-	var y_range: int = ceil(radius / 8.0)
+	# Ensure ranges are integers for proper bounding box coverage
+	var x_range: int = ceil(buffered_radius / 16.0)
+	var y_range: int = ceil(buffered_radius / 8.0)
 	
 	# Loop through the bounding box of the ellipse
 	for x in range(center_grid.x - x_range, center_grid.x + x_range + 1):
@@ -51,12 +54,14 @@ func clear_fog(world_pos: Vector2, radius: float) -> void:
 
 # Port of raycast() laser path clearing from index.js
 # Clears a multi-layer tunnel along a path: Core (thick center) + Halos (side points)
+# Surgical Requirement: Uses stride of 8.0 pixels to step along the path
+# Halos: Two parallel rows of clearing stamps +/- 12px from the core path to widen the tunnel
 func clear_laser_path(origin: Vector2, direction: Vector2, length: float) -> void:
 	# Normalize direction vector
 	var dir_normalized := direction.normalized()
 	var perp := Vector2(-dir_normalized.y, dir_normalized.x)  # Perpendicular vector for halos
 	
-	# Stride: step size along the path (8px matches JS implementation)
+	# Stride: step size along the path (8.0 pixels as per surgical requirement)
 	const STRIDE: float = 8.0
 	
 	# Core clearing: thick center line (radius 16)
@@ -64,17 +69,17 @@ func clear_laser_path(origin: Vector2, direction: Vector2, length: float) -> voi
 	
 	# Halo clearing: side points (radius 8)
 	const HALO_RADIUS: float = 8.0
-	const HALO_OFFSET: float = 24.0  # Distance from center for halo points
+	const HALO_OFFSET: float = 12.0  # Distance from center for halo points (+/- 12px as per requirement)
 	
 	# Step along the path from origin to end
 	var distance: float = 0.0
 	while distance <= length:
 		var step_pos := origin + dir_normalized * distance
 		
-		# Clear core at this step
+		# Clear core at this step (uses isometric distance formula via clear_fog)
 		clear_fog(step_pos, CORE_RADIUS)
 		
-		# Clear halos: two points perpendicular to the direction
+		# Clear halos: two parallel rows +/- 12px from the core path
 		var halo_left := step_pos + perp * HALO_OFFSET
 		var halo_right := step_pos - perp * HALO_OFFSET
 		clear_fog(halo_left, HALO_RADIUS)

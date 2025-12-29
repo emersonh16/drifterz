@@ -38,10 +38,12 @@ func _draw() -> void:
 		
 		# Convert to SubViewport-relative coordinates (origin is at camera world position)
 		# Add viewport center offset so player (at camera world pos) appears at viewport center
-		var viewport_relative := (world_center - camera_world_pos) + viewport_center
+		# Round to nearest pixel for pixel-perfect rendering (prevents sub-pixel gaps)
+		var viewport_relative := ((world_center - camera_world_pos) + viewport_center).round()
 		
 		# Define diamond polygon points relative to center (isometric offsets)
-		# These offsets create a perfect 16x8 diamond that tiles seamlessly
+		# MUST be exactly (0, -4), (8, 0), (0, 4), (-8, 0) to align with 16x8 sub-tiles
+		# 4 Miasma diamonds wide and 4 deep must fit exactly inside one 64x32 ground tile
 		var diamond_points := PackedVector2Array([
 			viewport_relative + Vector2(0, -4),   # Top
 			viewport_relative + Vector2(8, 0),    # Right
@@ -49,5 +51,5 @@ func _draw() -> void:
 			viewport_relative + Vector2(-8, 0)    # Left
 		])
 		
-		# Draw isometric diamond polygon instead of axis-aligned rectangle
+		# Draw isometric diamond polygon (pixel-perfect coordinates prevent sub-pixel gaps)
 		draw_colored_polygon(diamond_points, Color.WHITE)
