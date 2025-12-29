@@ -22,21 +22,28 @@ const TILE_SIZE_HEIGHT: int = 8
 func clear_fog(world_pos: Vector2, radius: float) -> void:
 	# Convert World Position -> Miasma Grid Coordinates using centralized converter
 	var center_grid: Vector2i = CoordConverter.world_to_miasma(world_pos)
-	# Use average tile size for radius calculation (approximation for isometric)
-	var avg_tile_size: float = (TILE_SIZE_WIDTH + TILE_SIZE_HEIGHT) / 2.0
-	var radius_in_tiles: int = ceil(radius / avg_tile_size)
-	var r2: float = (radius / avg_tile_size) ** 2
 	
-	# Loop through the bounding box of the circle
-	for x in range(center_grid.x - radius_in_tiles, center_grid.x + radius_in_tiles + 1):
-		for y in range(center_grid.y - radius_in_tiles, center_grid.y + radius_in_tiles + 1):
+	# Use absolute world pixels for distance calculation
+	var r_sq: float = radius * radius
+	
+	# Set loop ranges to cover the full ellipse (different for X and Y due to isometric)
+	var x_range: int = ceil(radius / 16.0)
+	var y_range: int = ceil(radius / 8.0)
+	
+	# Loop through the bounding box of the ellipse
+	for x in range(center_grid.x - x_range, center_grid.x + x_range + 1):
+		for y in range(center_grid.y - y_range, center_grid.y + y_range + 1):
 			var tile_pos := Vector2i(x, y)
 			
-			# Circle Check: dx*dx + dy*dy <= r2 (Do it right, no square holes)
-			var dx: float = x - (world_pos.x / TILE_SIZE_WIDTH)
-			var dy: float = y - (world_pos.y / TILE_SIZE_HEIGHT)
+			# Get the tile's world center position
+			var t_world: Vector2 = CoordConverter.miasma_to_world_center(tile_pos)
 			
-			if dx*dx + dy*dy <= r2:
+			# Calculate distance in world pixels with Y scaled for isometric flattening
+			var dx: float = t_world.x - world_pos.x
+			var dy: float = (t_world.y - world_pos.y) * 2.0
+			
+			# Clear tile only if within the elliptical radius (absolute world-pixel distance check)
+			if (dx*dx + dy*dy) <= r_sq:
 				# Store the time it was cleared (for future regrowth logic)
 				if not cleared_tiles.has(tile_pos):
 					cleared_tiles[tile_pos] = Time.get_ticks_msec()

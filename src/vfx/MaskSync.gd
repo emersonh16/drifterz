@@ -16,7 +16,17 @@ func _process(_delta: float) -> void:
 	if not main_camera:
 		return
 	
-	# Step 4: Sync Logic - If we have a camera, sync position and zoom
+	# Step 4: Ensure SubViewport size matches main window size
+	var parent_viewport := get_parent() as SubViewport
+	if parent_viewport:
+		# Get the main window's visible rect size
+		var main_viewport := get_tree().root.get_viewport()
+		if main_viewport:
+			var visible_rect := main_viewport.get_visible_rect()
+			parent_viewport.size = visible_rect.size
+	
+	# Step 5: Sync Logic - Sync position, zoom, and offset
 	# Round position to align SubViewport pixels with screen pixels (prevents jitter)
 	global_position = main_camera.global_position
 	zoom = main_camera.zoom
+	offset = main_camera.offset

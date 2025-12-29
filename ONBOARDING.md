@@ -8,13 +8,16 @@
 ### 1. Miasma (Fog) System
 - **MiasmaManager** (`src/core/MiasmaManager.gd`): Autoload singleton that manages the fog clearing system
   - Maintains a sparse dictionary of cleared tiles: `cleared_tiles: Dictionary` (key: Vector2i grid coordinates, value: int timestamp in msec)
-  - Clears fog in a ~200px radius (roughly 3 tiles) around the player
-  - Uses circle-based clearing logic (no square holes)
-  - Tile size constant: `TILE_SIZE = 64`
-  - Listens to `SignalBus.derelict_moved` signal to automatically clear fog when player moves
+  - Clears fog using world-pixel distance checks for elliptical clearing
+  - Tile size constants: `TILE_SIZE_WIDTH = 16`, `TILE_SIZE_HEIGHT = 8` (miasma tiles are 1/4 size of ground tiles)
+  - Uses `CoordConverter.world_to_miasma()` and `CoordConverter.miasma_to_world_center()` for centralized coordinate conversion
+  - Distance calculation: Uses world pixels with Y-axis scaled by 2.0 for isometric space: `(dx*dx + dy*dy) <= r_sq`
+  - Loop ranges adjusted for ellipse: X uses `ceil(radius / 16.0)`, Y uses `ceil(radius / 8.0)`
 
 - **FogPainter** (`src/vfx/FogPainter.gd`): Draws the visual representation of cleared fog
-  - Extends Node2D, draws white circles where fog has been cleared
+  - Extends Node2D, draws 16x8 isometric diamond polygons for each cleared tile
+  - Uses hardcoded diamond points: `(0, -4), (8, 0), (0, 4), (-8, 0)` from tile center to ensure no gaps
+  - Uses `CoordConverter.miasma_to_world_center()` to convert grid positions to world coordinates
   - Redraws every frame (optimization planned for later)
   - Uses `MiasmaManager.cleared_tiles` dictionary to determine what to draw
 
@@ -54,10 +57,16 @@
   - Currently has: `signal derelict_moved(new_position: Vector2)`
   - Allows any system to listen/react to player movement without tight coupling
 
-- **CoordConverter** (`src/core/CoordConverter.gd`): Utility for coordinate transformations
-  - Static function: `to_isometric(vector: Vector2) -> Vector2`
-  - Formula: `Vector2(vector.x - vector.y, (vector.x + vector.y) * 0.5)`
-  - Note: Currently not actively used in fog system (FogPainter uses standard grid math)
+- **CoordConverter** (`src/core/CoordConverter.gd`): Centralized utility for coordinate transformations
+  - `world_to_miasma(pos: Vector2) -> Vector2i`: Converts world pixel coordinates to 16x8 miasma grid coordinates
+    - Formula: `Vector2i(floor(pos.x / 16), floor(pos.y / 8))`
+    - Used by `MiasmaManager.clear_fog()` for coordinate conversion
+  - `miasma_to_world_center(grid_pos: Vector2i) -> Vector2`: Converts miasma grid coordinates to world center position
+    - Formula: `Vector2(grid_pos.x * 16 + 8, grid_pos.y * 8 + 4)`
+    - Used by `MiasmaManager.clear_fog()` and `FogPainter._draw()` for positioning
+  - `to_isometric(vector: Vector2) -> Vector2`: Isometric projection utility
+    - Formula: `Vector2(vector.x - vector.y, (vector.x + vector.y) * 0.5)`
+    - Note: Currently not actively used in fog system
 
 ## Technical Details
 
@@ -69,11 +78,22 @@
 
 ### Fog Rendering Pipeline
 1. Player moves → `DerelictLogic` emits `SignalBus.derelict_moved`
-2. `MiasmaManager` receives signal → clears tiles in radius → stores in `cleared_tiles` dict
-3. `FogPainter` (in FogMask SubViewport) draws white circles for cleared tiles
+2. `MiasmaManager.clear_fog(world_pos, radius)` receives world position and radius:
+   - Converts world position to miasma grid: `center_grid = CoordConverter.world_to_miasma(world_pos)`
+   - Defines `r_sq = radius * radius` (absolute world pixels, no average tile size)
+   - Sets loop ranges: X uses `ceil(radius / 16.0)`, Y uses `ceil(radius / 8.0)` to cover full ellipse
+   - For each tile in bounding box:
+     - Gets tile's world center: `t_world = CoordConverter.miasma_to_world_center(tile_pos)`
+     - Calculates world-pixel distance: `dx = t_world.x - world_pos.x`, `dy = (t_world.y - world_pos.y) * 2.0` (isometric flattening)
+     - Clears tile only if `(dx*dx + dy*dy) <= r_sq` (absolute world-pixel distance check)
+   - Stores cleared tiles in `cleared_tiles` dictionary
+   - **Result**: Solid elliptical clearing with no checkerboard pattern
+3. `FogPainter` (in FogMask SubViewport) draws 16x8 isometric diamonds for each cleared tile:
+   - Converts grid positions to world centers using `CoordConverter.miasma_to_world_center()`
+   - Draws hardcoded diamond polygons with points: `(0,-4), (8,0), (0,4), (-8,0)`
 4. `MaskSync` camera keeps FogMask viewport aligned with main camera
 5. `MiasmaHole` shader reads FogMask texture → inverts it → controls fog ColorRect alpha
-6. Result: Fog appears everywhere except where player has been
+6. Result: Fog appears everywhere except where player has been (solid elliptical clearing area)
 
 ### Input System
 - WASD keys for movement
@@ -97,20 +117,29 @@
 - **Conversion**: World → Grid: `(world_pos / TILE_SIZE).floor()` → `Vector2i`
 - **Location**: Used throughout movement, fog clearing, and beam systems
 
-### 2. Grid/Tile Coordinates (Vector2i)
+### 2. Miasma Grid Coordinates (Vector2i)
 - **Type**: `Vector2i` (integer-based, tile indices)
 - **Origin**: Top-left tile (0, 0)
 - **Units**: Tile indices (not pixels)
-- **Tile Size**: 64 pixels per tile (defined in `MiasmaManager.TILE_SIZE`)
+- **Tile Size**: 16x8 pixels per miasma tile (defined in `MiasmaManager.TILE_SIZE_WIDTH` and `TILE_SIZE_HEIGHT`)
 - **Used By**:
-  - `MiasmaManager.cleared_tiles`: Dictionary keys are `Vector2i` grid coordinates
+  - `MiasmaManager.cleared_tiles`: Dictionary keys are `Vector2i` miasma grid coordinates
+  - `MiasmaManager.clear_fog()`: Converts world → miasma grid using `CoordConverter.world_to_miasma()`, then stores grid coordinates
+  - `FogPainter.gd`: Converts grid → world for drawing using `CoordConverter.miasma_to_world_center()`
+- **Conversion** (via CoordConverter):
+  - World → Miasma Grid: `CoordConverter.world_to_miasma(pos)` → `Vector2i(floor(pos.x / 16), floor(pos.y / 8))`
+  - Miasma Grid → World Center: `CoordConverter.miasma_to_world_center(grid_pos)` → `Vector2(grid_pos.x * 16 + 8, grid_pos.y * 8 + 4)`
+- **Location**: Core to fog system storage and rendering
+
+### 2b. Ground Grid Coordinates (Vector2i)
+- **Type**: `Vector2i` (integer-based, tile indices)
+- **Origin**: Top-left tile (0, 0)
+- **Units**: Tile indices (not pixels)
+- **Tile Size**: 64x32 pixels per ground tile
+- **Used By**:
   - `World.gd`: `world_grid.set_cell(Vector2i(x, y), ...)` - places tiles at grid positions
-  - `MiasmaManager.clear_fog()`: Converts world → grid, then stores grid coordinates
-  - `FogPainter.gd`: Converts grid → world for drawing: `Vector2(grid_pos.x, grid_pos.y) * tile_size + Vector2(tile_size * 0.5, tile_size * 0.5)`
-- **Conversion**: 
-  - World → Grid: `(world_pos / TILE_SIZE).floor()` → `Vector2i`
-  - Grid → World: `Vector2(grid_pos.x, grid_pos.y) * TILE_SIZE + Vector2(TILE_SIZE * 0.5, TILE_SIZE * 0.5)` (center of tile)
-- **Location**: Core to fog system storage and tilemap operations
+  - Godot's TileMapLayer handles isometric rendering automatically
+- **Location**: `src/scenes/World.tscn` and `src/scenes/World.gd`
 
 ### 3. Isometric Coordinates (Vector2 - Defined but Unused)
 - **Type**: `Vector2` (float-based)
@@ -158,7 +187,7 @@
 
 #### MaskSync Camera (FogMask SubViewport)
 - **Type**: `Camera2D` (extends `MaskSync.gd`)
-- **Location**: ⚠️ **MISSING FROM SCENE** - Should be in `World/FogMask/` but not present in `World.tscn`
+- **Location**: `World/FogMask/MaskSync` (Camera2D node in FogMask SubViewport)
 - **Purpose**: Syncs with main camera to keep fog mask aligned
 - **Sync Logic**: 
   - Finds main camera via `get_tree().root.get_camera_2d()`
@@ -166,7 +195,7 @@
   - Process priority: 100 (runs after player movement)
 - **Coordinate Space**: World coordinates (synced to main camera)
 - **Location**: `src/vfx/MaskSync.gd`
-- **Status**: ⚠️ **NEEDS TO BE ADDED TO SCENE** - Code exists but camera node missing from scene tree
+- **Status**: ✅ **IMPLEMENTED** - Camera node added to scene tree
 
 ### 7. FogPainter Drawing Coordinates
 - **Type**: `Vector2` (world coordinates for drawing)
@@ -174,9 +203,8 @@
 - **Coordinate Space**: World coordinates (drawn in FogMask viewport which uses world space via camera)
 - **Conversion Logic**:
   - Reads grid coordinates from `MiasmaManager.cleared_tiles`
-  - Converts to world: `Vector2(grid_pos.x, grid_pos.y) * tile_size + Vector2(tile_size * 0.5, tile_size * 0.5)`
-  - Draws white circles at world positions
-- **Issue**: Uses tile center calculation but doesn't account for isometric tile shape
+  - Converts to world center using `CoordConverter.miasma_to_world_center(grid_pos)`
+  - Draws 16x8 isometric diamond polygons with hardcoded points: `(0,-4), (8,0), (0,4), (-8,0)` from tile center
 - **Location**: `src/vfx/FogPainter.gd`
 
 ### 8. Shader UV Coordinates
@@ -191,37 +219,28 @@
 
 | From | To | Conversion | Location |
 |------|-----|------------|----------|
-| World (Vector2) | Grid (Vector2i) | `(world_pos / TILE_SIZE).floor()` | `MiasmaManager.clear_fog()` |
-| Grid (Vector2i) | World (Vector2) | `Vector2(grid_pos) * TILE_SIZE + Vector2(TILE_SIZE * 0.5, TILE_SIZE * 0.5)` | `FogPainter._draw()` |
-| World (Vector2) | Isometric (Vector2) | `Vector2(x - y, (x + y) * 0.5)` | `CoordConverter.to_isometric()` (unused) |
+| World (Vector2) | Miasma Grid (Vector2i) | `CoordConverter.world_to_miasma(pos)` | `MiasmaManager.clear_fog()`, centralized |
+| Miasma Grid (Vector2i) | World Center (Vector2) | `CoordConverter.miasma_to_world_center(grid_pos)` | `MiasmaManager.clear_fog()`, `FogPainter._draw()`, centralized |
+| World (Vector2) | Isometric (Vector2) | `CoordConverter.to_isometric(vector)` | `CoordConverter.to_isometric()` (unused) |
 | World | Screen | Camera transform | Godot Camera2D (automatic) |
 | World | FogMask Viewport | MaskSync camera sync | `MaskSync._process()` |
 
 ### Known Issues & Complexity Problems
 
-1. **Multiple Unused Coordinate Systems**: 
+1. **Isometric Projection Utility Unused**: 
    - `CoordConverter.to_isometric()` exists but is never called
-   - Fog system uses standard grid math despite isometric visuals
+   - May be useful for future features but not currently needed
 
-2. **Inconsistent Tile Center Calculation**:
-   - `FogPainter` adds `tile_size * 0.5` offset (assumes square tiles)
-   - Isometric tiles are 64x32 (not square), so center calculation may be incorrect
+2. **Performance Optimization Opportunity**:
+   - `FogPainter` redraws every frame (optimization planned for later)
+   - Could use dirty rectangles or incremental updates
 
-3. **Missing Camera Node**:
-   - `MaskSync.gd` script exists but camera node is not in `World.tscn` scene tree
-   - Fog mask may not align properly without this camera
-
-4. **Coordinate System Confusion**:
-   - World coordinates used for movement (pixels)
-   - Grid coordinates used for fog storage (tile indices)
-   - Isometric coordinates defined but unused
-   - Screen coordinates for UI overlay
-   - Multiple conversions happening in different places
-
-5. **Tile Size Mismatch**:
-   - `MiasmaManager.TILE_SIZE = 64` (assumes square)
-   - Actual tile is 64x32 (isometric diamond)
-   - Grid calculations may not align perfectly with visual tiles
+3. **Coordinate System Status**:
+   - ✅ **FIXED**: Coordinate conversions are now centralized in `CoordConverter`
+   - ✅ **FIXED**: Miasma grid uses proper 16x8 tile dimensions
+   - ✅ **FIXED**: World-pixel distance checks ensure consistent coordinate space
+   - ✅ **FIXED**: MaskSync camera is now in scene tree
+   - ✅ **FIXED**: FogPainter uses hardcoded diamond points for perfect alignment
 
 ### Maps & Scenes
 
@@ -235,8 +254,8 @@
     - `MiasmaColorRect` - Full-screen fog with shader
   - `FogMask` (SubViewport) - 1152x648 render target
     - `FogMaskColorRect` - Black background
-    - `FogPainter` (Node2D) - Draws cleared fog areas
-    - ⚠️ **Missing**: `MaskSync` Camera2D node
+    - `MaskSync` (Camera2D) - Syncs with main camera for fog mask alignment
+    - `FogPainter` (Node2D) - Draws cleared fog areas (16x8 isometric diamonds)
 
 #### Player Entity Scene
 - **File**: `src/entities/DerelictLogic.tscn`
@@ -250,11 +269,13 @@
 
 ### Important Coordinate-Related Constants
 
-- `MiasmaManager.TILE_SIZE = 64` (pixels per tile - assumes square)
-- Actual tile dimensions: 64x32 pixels (isometric)
-- World grid size: 80x80 tiles
+- `MiasmaManager.TILE_SIZE_WIDTH = 16` (miasma tile width in pixels)
+- `MiasmaManager.TILE_SIZE_HEIGHT = 8` (miasma tile height in pixels)
+- Miasma tiles are 1/4 the size of ground tiles (16x8 vs 64x32)
+- Ground tile dimensions: 64x32 pixels (isometric)
+- World grid size: 80x80 ground tiles
 - FogMask viewport size: 1152x648 pixels
-- Fog clearing radius: ~200 pixels (~3 tiles)
+- Fog clearing radius: ~200 pixels (uses world-pixel distance checks)
 
 ## Project Structure
 
@@ -299,10 +320,12 @@ drifterz/
 
 ## Current State & Next Steps
 - ✅ Basic player movement implemented
-- ✅ Fog clearing system working
+- ✅ Fog clearing system working with world-pixel distance checks
 - ✅ Shader-based fog rendering functional
+- ✅ Coordinate conversions centralized in CoordConverter
+- ✅ FogPainter draws seamless 16x8 isometric diamonds
+- ✅ MaskSync camera properly set up in scene
 - 🔄 FogPainter redraws every frame (optimization opportunity)
-- 🔄 CoordConverter exists but not used in fog system yet
 - 🔄 Future: Fog regrowth logic (timestamps stored for this purpose)
 
 ## Key Design Patterns
@@ -314,7 +337,8 @@ drifterz/
 
 ## Notes for Development
 - The fog system is designed to be extensible (timestamps stored for regrowth)
-- Isometric coordinate conversion utility exists but fog currently uses standard grid math
+- Coordinate conversions are centralized in `CoordConverter` for consistency
+- Fog clearing uses world-pixel distance checks with Y-axis scaling (2.0x) for isometric elliptical clearing
 - Performance optimization needed: FogPainter redraws entire dictionary every frame
 - The game uses Godot 4.5 with Forward Plus rendering
 
