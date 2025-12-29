@@ -29,7 +29,7 @@ func _draw() -> void:
 		return
 	var viewport_center := parent_viewport.size / 2.0
 
-	# Draw 16x8 rectangles for each cleared tile to ensure full coverage
+	# Draw isometric diamonds for each cleared tile to match the isometric grid
 	# The camera is positioned at viewport center, so we need to offset drawing by viewport center
 	# to center the cleared area on the player
 	for grid_pos in MiasmaManager.cleared_tiles.keys():
@@ -40,7 +40,14 @@ func _draw() -> void:
 		# Add viewport center offset so player (at camera world pos) appears at viewport center
 		var viewport_relative := (world_center - camera_world_pos) + viewport_center
 		
-		# Draw rect that covers the entire 16x8 Miasma grid unit
-		# Rect position is top-left corner: center - half_size
-		var rect := Rect2(viewport_relative - Vector2(8, 4), Vector2(16, 8))
-		draw_rect(rect, Color.WHITE)
+		# Define diamond polygon points relative to center (isometric offsets)
+		# These offsets create a perfect 16x8 diamond that tiles seamlessly
+		var diamond_points := PackedVector2Array([
+			viewport_relative + Vector2(0, -4),   # Top
+			viewport_relative + Vector2(8, 0),    # Right
+			viewport_relative + Vector2(0, 4),    # Bottom
+			viewport_relative + Vector2(-8, 0)    # Left
+		])
+		
+		# Draw isometric diamond polygon instead of axis-aligned rectangle
+		draw_colored_polygon(diamond_points, Color.WHITE)
