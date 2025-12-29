@@ -18,7 +18,7 @@ func apply_laser(origin: Vector2, direction: Vector2, length: float) -> void:
 	MiasmaManager.clear_laser_path(origin, direction, length)
 
 func apply_cone(origin: Vector2, direction: Vector2, angle: float, length: float) -> void:
-	# TODO: Implement cone clearing logic
-	# For now, use a simple bubble at the tip
-	var tip_pos := origin + direction.normalized() * length
-	MiasmaManager.clear_fog(tip_pos, 32.0)
+	# Apply Keyhole Cone clearing: creates V-shape with increasing radius and rounded cap
+	# Ensure direction is normalized before passing to clear_cone_path
+	var dir_normalized := direction.normalized()
+	MiasmaManager.clear_cone_path(origin, dir_normalized, angle, length)

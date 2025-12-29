@@ -47,10 +47,39 @@
   - Movement via WASD/Arrow keys (using `Input.get_vector`)
   - Emits `SignalBus.derelict_moved` signal when moving
   - Default max speed: 300.0 (from `DerelictStats`)
+  - Contains `BeamController` node for lighthouse beam system
 
 - **DerelictStats** (`src/data/DerelictStats.gd`): Resource class for player stats
   - Currently has `max_speed: float = 300.0`
   - Loaded via `DefaultStats.tres` resource
+
+### 2b. Lighthouse Beam System
+- **BeamController** (`src/systems/beam/BeamController.gd`): Main brain for beam mode switching
+  - Located at `DerelictLogic/BeamController`
+  - **BeamMode Enum**: `OFF`, `BUBBLE_MIN` (32px radius), `BUBBLE_MAX` (128px radius), `CONE` (placeholder), `LASER` (persistent tunnel)
+  - **Input Handling**:
+    - Mouse wheel up/down: Cycles through all modes
+    - Left Mouse Button: Instantly snaps to `LASER` mode
+  - **Mode Behavior**:
+    - `OFF`: No clearing
+    - `BUBBLE_MIN`/`BUBBLE_MAX`: Continuous clearing around player (always active)
+    - `CONE`: Placeholder implementation (clears bubble at tip only)
+    - `LASER`: Creates persistent wide tunnel on left-click (8px stride, ±12px halos)
+  - Uses `BeamModel` for data descriptors and `BeamDebugVisualizer` for visual feedback
+
+- **BeamMiasmaEmitter** (`src/systems/beam/BeamMiasmaEmitter.gd`): Routes beam actions to MiasmaManager
+  - Located at `DerelictLogic/BeamController/BeamMiasmaEmitter`
+  - **Functions**:
+    - `apply_bubble(bubble: Dictionary)`: Routes bubble clearing to `MiasmaManager.clear_fog()`
+    - `apply_laser(origin, direction, length)`: Routes laser clearing to `MiasmaManager.clear_laser_path()`
+    - `apply_cone(origin, direction, angle, length)`: Placeholder - currently clears bubble at tip
+  - **Additive Miasma Rule**: Never resets or clears `cleared_tiles` dictionary - all operations are additive and permanent
+
+- **BeamModel** (`src/systems/beam/BeamModel.gd`): Data model for beam descriptors
+  - `get_bubble_descriptor(origin, radius)`: Returns dictionary with origin and radius
+
+- **BeamDebugVisualizer** (`src/systems/beam/BeamDebugVisualizer.gd`): Visual debug representation
+  - Shows current beam mode and clearing area visualization
 
 ### 3. World System
 - **World.gd** (`src/scenes/World.gd`): Main world script
@@ -285,9 +314,12 @@
 - **Children**:
   - `Sprite2D` - Player sprite
   - `Camera2D` - Main game camera (follows player)
-  - `BeamController` (Node) - Beam system
-    - `BeamVisualizer` (Node2D)
-    - `BeamMiasmaEmitter` (Node)
+  - `BeamController` (Node) - Lighthouse beam system controller
+    - Script: `src/systems/beam/BeamController.gd`
+    - `BeamVisualizer` (Node2D) - Visual debug representation
+      - Contains `BeamDebugVisualizer` script instance
+    - `BeamMiasmaEmitter` (Node) - Routes beam actions to MiasmaManager
+      - Script: `src/systems/beam/BeamMiasmaEmitter.gd`
 
 ### Important Coordinate-Related Constants
 
@@ -326,6 +358,13 @@ drifterz/
     ├── scenes/            # Main game scenes
     │   ├── World.gd       # Main world script
     │   └── World.tscn     # Main scene (entry point)
+    ├── systems/           # Gameplay systems
+    │   └── beam/          # Lighthouse beam system
+    │       ├── BeamController.gd
+    │       ├── BeamMiasmaEmitter.gd
+    │       ├── BeamModel.gd
+    │       ├── BeamDebugVisualizer.gd
+    │       └── BeamTypes.gd
     └── vfx/               # Visual effects
         ├── FogPainter.gd      # Fog visual rendering
         └── MiasmaHole.gdshader # Fog shader
@@ -347,8 +386,13 @@ drifterz/
 - ✅ Coordinate conversions centralized in CoordConverter with pixel-perfect floor division
 - ✅ FogPainter draws seamless 16x8 isometric diamonds with exact offsets `(0, -4), (8, 0), (0, 4), (-8, 0)`
 - ✅ **Camera-Local Hierarchy**: FogMask SubViewport as child of Camera2D eliminates tracking drift
+- ✅ **Lighthouse Beam System**: BeamController with 5 modes (OFF, BUBBLE_MIN, BUBBLE_MAX, CONE, LASER)
+- ✅ **BeamMiasmaEmitter**: Routes beam actions to MiasmaManager with additive clearing
+- ✅ **Laser Mode**: Creates persistent wide tunnels (8px stride, ±12px halos) that stay forever
 - 🔄 FogPainter redraws every frame (optimization opportunity)
+- 🔄 **Cone Mode**: Currently placeholder - needs proper cone clearing implementation
 - 🔄 Future: Fog regrowth logic (timestamps stored for this purpose)
+- 🔄 Future: Beam activity Heat/Sound system for enemy detection (Stealth Loop)
 
 ## Key Design Patterns
 - **Autoload Singletons**: MiasmaManager, SignalBus

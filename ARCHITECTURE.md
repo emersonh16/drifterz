@@ -28,6 +28,10 @@
             * **FogMask (SubViewport)**: Dynamic size render target (synced to window size) for the fog mask. Child of Camera2D for automatic transform inheritance.
                 * **FogMaskColorRect**: Black background.
                 * **FogPainter (Node2D)**: Draws 16x8 isometric diamond polygons for cleared Miasma using exact offsets `(0, -4), (8, 0), (0, 4), (-8, 0)`. Handles SubViewport size syncing.
+        * **BeamController (Node)**: Lighthouse beam system controller (`src/systems/beam/BeamController.gd`).
+            * **BeamVisualizer (Node2D)**: Visual debug representation container.
+                * **BeamDebugVisualizer**: Debug visualization script instance.
+            * **BeamMiasmaEmitter (Node)**: Routes beam actions to MiasmaManager (`src/systems/beam/BeamMiasmaEmitter.gd`).
     * **MiasmaSheet (CanvasLayer)**: Full-screen ColorRect with `MiasmaHole.gdshader`. Fixed to screen (`follow_viewport_enabled = false`).
 
 ---
@@ -58,14 +62,28 @@
 * **Persistence**: `cleared_tiles` dictionary stores `Vector2i` keys representing Miasma sub-tiles. This is the persistent Source of Truth - entries are only removed by the future Regrowth System, never by clearing operations or frame-reset.
 
 ### The Lighthouse (Beam System)
-* **Modes**: Supports **Bubble**, **Cone**, and **Laser** via state-based clearing logic.
-* **Interaction**: The Beam emits "Stamp" requests to the `MiasmaManager`.
-* **Signature**: Beam activity increases Heat/Sound, influencing enemy detection (Stealth Loop).
+* **Location**: `src/systems/beam/` directory
+* **Components**:
+  - **BeamController.gd**: Main brain - handles mode switching and input. Located at `DerelictLogic/BeamController`.
+  - **BeamMiasmaEmitter.gd**: Routes beam mode actions to appropriate `MiasmaManager` functions. Located at `DerelictLogic/BeamController/BeamMiasmaEmitter`.
+  - **BeamModel.gd**: Data model for beam descriptors (bubble, cone, laser).
+  - **BeamDebugVisualizer.gd**: Visual debug representation of beam modes.
+* **Modes**: `BeamMode` enum with 5 modes: `OFF`, `BUBBLE_MIN` (32px radius), `BUBBLE_MAX` (128px radius), `CONE` (placeholder), `LASER` (persistent tunnel).
+* **Input**:
+  - Mouse wheel: Cycles through modes (OFF → BUBBLE_MIN → BUBBLE_MAX → CONE → LASER → OFF).
+  - Left Mouse Button: Instantly snaps to `LASER` mode when pressed.
+* **Clearing Logic**:
+  - **Bubble Modes**: Continuous clearing via `MiasmaManager.clear_fog()` with specified radius.
+  - **Laser Mode**: Creates persistent wide tunnel using `MiasmaManager.clear_laser_path()` with 8px stride and ±12px halos.
+  - **Cone Mode**: Currently placeholder (clears bubble at tip only).
+* **Additive Miasma**: All beam clearing operations are additive and permanent - tiles persist forever (only removed by future Regrowth System).
+* **Future**: Beam activity will increase Heat/Sound, influencing enemy detection (Stealth Loop) - not yet implemented.
 
 ---
 
 ## 4. File Map & Dependencies
 - `src/core/`: Global logic (MiasmaManager, SignalBus, CoordConverter).
 - `src/vfx/`: Rendering (FogPainter, MiasmaHole.gdshader).
-- `src/entities/`: Gameplay actors (DerelictLogic, BeamController).
+- `src/entities/`: Gameplay actors (DerelictLogic).
+- `src/systems/beam/`: Beam system components (BeamController, BeamMiasmaEmitter, BeamModel, BeamDebugVisualizer, BeamTypes).
 - `src/scenes/`: Main World environment.
