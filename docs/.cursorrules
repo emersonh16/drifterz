@@ -6,13 +6,13 @@ You are an expert Godot 4.5 developer with deep knowledge of:
 - World-space vs screen-space coordinate systems
 - CanvasLayer and blend modes
 - Isometric tile mapping
-- Shader programming in Godot
+- Z-index layering
 
 ## Law 2: World-Space Fog Rendering
 **All fog rendering MUST be world-space. Never subtract camera position from tile origins.**
 
 - FogPainter renders tiles at their absolute world coordinates
-- Formula: `world_origin = Vector2(grid_pos.x * 16.0, grid_pos.y * 8.0)`
+- Formula: `world_center = Vector2(grid_pos.x * 16.0 + 8.0, grid_pos.y * 8.0 + 4.0)`
 - **FORBIDDEN**: `screen_pos = (world_pos - camera_pos) + viewport_center`
 - **FORBIDDEN**: Any coordinate transform involving the camera for fog rendering
 
@@ -27,23 +27,36 @@ You are an expert Godot 4.5 developer with deep knowledge of:
 ## Law 4: No Camera Transforms for Miasma Grid
 **No coordinate transforms involving the camera are permitted for the miasma grid.**
 
-- Grid → World conversion: `Vector2(grid_pos.x * 16.0, grid_pos.y * 8.0)`
+- Grid → World conversion: `Vector2(grid_pos.x * 16.0 + 8.0, grid_pos.y * 8.0 + 4.0)`
 - World → Grid conversion: `Vector2i(floor(pos.x / 16.0), floor(pos.y / 8.0))`
 - **FORBIDDEN**: Camera position in any miasma grid calculation
 - **FORBIDDEN**: Screen-space conversion for fog rendering
+
+## Law 5: Physical Sandwich Rendering
+**Use simple z-index layering. Avoid complex shaders, masks, or SubViewports.**
+
+- Current method: Physical Sandwich (z-index layering)
+- WorldGrid: z_index -10 (floor)
+- MiasmaOverlay: z_index -5 (dark fog)
+- FogPainter: z_index 0 (grass-colored diamonds)
+- DerelictLogic: z_index 10 (player)
+- **AVOID**: Shaders, BackBufferCopy, CanvasGroup, Light2D masking
+- **PREFER**: Simple z-index layering and world-space coordinates
 
 ## Additional Rules
 
 ### Coordinate System
 - **Tile Size**: 16 pixels wide × 8 pixels tall
 - **Grid Formula**: `Vector2i(floor(world_pos.x / 16.0), floor(world_pos.y / 8.0))`
-- **World Origin Formula**: `Vector2(grid_pos.x * 16.0, grid_pos.y * 8.0)`
+- **World Center Formula**: `Vector2(grid_pos.x * 16.0 + 8.0, grid_pos.y * 8.0 + 4.0)`
 - Always use explicit float division: `/ 16.0` not `/ 16`
 
 ### Architecture
 - No SubViewports for fog rendering
 - No ViewportTexture resources
-- Fog overlay uses CanvasLayer with Screen blend mode OR subtraction shader
+- No BackBufferCopy nodes
+- No shader materials for fog masking
+- Fog overlay uses simple ColorRect with z-index layering
 - FogPainter uses MultiMeshInstance2D with world-space transforms
 
 ### Code Quality
@@ -52,3 +65,10 @@ You are an expert Godot 4.5 developer with deep knowledge of:
 - Maintain `MiasmaManager.cleared_tiles` as the Source of Truth
 - All fog tiles are persistent and additive (never removed except by Regrowth System)
 
+### Current Status
+- ✅ World-space coordinate system working (proven by white snake test)
+- ✅ Zero drift confirmed
+- ✅ Physical Sandwich rendering method (z-index layering)
+- ⏳ Visual polish needed (texture matching, diamond shape)
+- ⏳ Performance optimization needed
+- ⏳ Regrowth system not yet implemented

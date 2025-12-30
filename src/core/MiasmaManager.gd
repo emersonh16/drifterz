@@ -1,12 +1,18 @@
 extends Node
 
 # MiasmaManager - The Source of Truth for Cleared Fog Tiles
-# Simple, world-space fog clearing system
+# Simple, world-space fog clearing system with buffer management
 
 # The persistent dictionary of cleared tiles
 # Key: Vector2i (miasma grid coordinates)
 # Value: int (timestamp in milliseconds - for future regrowth system)
 var cleared_tiles: Dictionary = {}
+
+# Buffer check configuration
+var enable_buffer_check: bool = true
+var buffer_distance_multiplier: float = 2.0
+var buffer_check_frame_counter: int = 0
+const BUFFER_CHECK_INTERVAL: int = 60  # Every 60 frames (once per second)
 
 # Clear fog at a world position with radius
 # world_pos: Vector2 - world pixel coordinates
@@ -35,3 +41,37 @@ func clear_fog(world_pos: Vector2, radius: float) -> void:
 				# Only add if not already cleared (avoid duplicate work)
 				if not cleared_tiles.has(grid_pos):
 					cleared_tiles[grid_pos] = Time.get_ticks_msec()
+
+# Buffer check: Remove tiles that are far from player
+# player_pos: Vector2 - player's world position
+func buffer_check(player_pos: Vector2) -> void:
+	if not enable_buffer_check:
+		return
+	
+	buffer_check_frame_counter += 1
+	if buffer_check_frame_counter < BUFFER_CHECK_INTERVAL:
+		return
+	
+	buffer_check_frame_counter = 0
+	
+	# Calculate maximum distance (2x viewport size)
+	var viewport := get_viewport()
+	if not viewport:
+		return
+	
+	var viewport_size := viewport.get_visible_rect().size
+	var max_distance := viewport_size.length() * buffer_distance_multiplier
+	var max_distance_sq := max_distance * max_distance
+	
+	# Remove tiles that are too far from player
+	var tiles_to_remove: Array[Vector2i] = []
+	for grid_pos in cleared_tiles.keys():
+		var tile_world_center := Vector2(grid_pos.x * 16.0 + 8.0, grid_pos.y * 8.0 + 4.0)
+		var distance_sq := player_pos.distance_squared_to(tile_world_center)
+		
+		if distance_sq > max_distance_sq:
+			tiles_to_remove.append(grid_pos)
+	
+	# Remove distant tiles
+	for grid_pos in tiles_to_remove:
+		cleared_tiles.erase(grid_pos)

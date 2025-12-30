@@ -4,6 +4,8 @@ extends MultiMeshInstance2D
 # Renders cleared fog tiles using MultiMesh at fixed world coordinates
 # NO CAMERA MATH - All positions are absolute world coordinates
 
+var last_tile_count: int = 0
+
 func _ready() -> void:
 	# ATTACHMENT: Ensure we have a MultiMesh resource
 	if not multimesh:
@@ -30,8 +32,11 @@ func _ready() -> void:
 	self_modulate = Color(0.4, 0.6, 0.3, 1.0)  # Meadow green
 
 func _process(_delta: float) -> void:
-	# DATA REFRESH: Rebuild MultiMesh based on cleared tiles
-	_rebuild_multimesh()
+	# PERFORMANCE: Only rebuild if cleared_tiles changed
+	var current_tile_count := MiasmaManager.cleared_tiles.size()
+	if current_tile_count != last_tile_count:
+		last_tile_count = current_tile_count
+		_rebuild_multimesh()
 
 func _rebuild_multimesh() -> void:
 	if not multimesh:

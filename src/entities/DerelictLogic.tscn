@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cv0i6wqfhy12" path="res://src/entities/DerelictLogic.gd" id="1_r0noa"]
 [ext_resource type="Texture2D" uid="uid://bquwiklv68jgt" path="res://src/assets/sprites/Derelict-sprite.png" id="2_8wxuy"]
+[ext_resource type="Script" path="res://src/systems/beam/Beam.gd" id="3_beam"]
 
 [node name="DerelictLogic" type="CharacterBody2D"]
 script = ExtResource("1_r0noa")
@@ -10,3 +11,6 @@ script = ExtResource("1_r0noa")
 texture = ExtResource("2_8wxuy")
 
 [node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="Beam" type="Node2D" parent="."]
+script = ExtResource("3_beam")
